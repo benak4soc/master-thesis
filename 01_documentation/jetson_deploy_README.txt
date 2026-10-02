@@ -1,5 +1,12 @@
 # Jetson Nano deployment — Pipeline C (LDA-LSTM)
 #
+# Full setup checklist:
+#   JETSON_NANO_DEPLOY_TODO.md
+#
+# What it detects:
+#   Binary Benign vs Attack on EVSE-B host HPC/kernel windows
+#   Input shape (10, 220) → Scaler → LDA(3) → ONNX LSTM
+#
 # Contents of jetson_deploy/pipeline_C_lda_lstm/:
 #   lda_lstm.onnx          ONNX model
 #   scaler.joblib          StandardScaler (fit on train)
@@ -10,9 +17,13 @@
 #
 # PC / Jetson Python deps:
 #   pip install numpy joblib scikit-learn onnxruntime
+#   (Jetson GUI) sudo apt-get install python3-tk
 #
-# Run demo:
+# CLI demo:
 #   python jetson_infer.py --demo
+#
+# GUI demo (recommended for presentations):
+#   python jetson_demo_gui.py
 #
 # Real window (.npy with shape [T, F] or [B, T, F]):
 #   python jetson_infer.py --input window.npy

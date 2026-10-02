@@ -1,0 +1,37 @@
+{
+  "pipeline": "C_LDA_LSTM",
+  "n_features_raw": 220,
+  "n_features_lda": 3,
+  "n_timesteps": 10,
+  "hidden_size": 16,
+  "num_layers": 1,
+  "dropout": 0.2,
+  "onnx_input": "[batch, timesteps, lda_features]",
+  "onnx_output": "logits [batch, 2]  (0=Benign, 1=Attack)",
+  "label_map": {
+    "0": "Benign",
+    "1": "Attack"
+  },
+  "checkpoint_metrics": {
+    "val": {
+      "accuracy": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0
+    },
+    "test": {
+      "accuracy": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0
+    },
+    "n_params": 1378,
+    "latency_ms_per_window": 0.3953530004946515,
+    "config": {
+      "hidden_size": 16,
+      "num_layers": 1,
+      "dropout": 0.2,
+      "learning_rate": 0.001,
+      "batch_size": 64
+    }
+  },
+  "feature_columns_file": "feature_columns.txt"
+}

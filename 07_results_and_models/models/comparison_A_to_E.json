@@ -1,0 +1,80 @@
+{
+  "comparison": [
+    {
+      "pipeline": "A LSTM",
+      "architecture": "LSTM",
+      "dim_reduction": "None",
+      "features": 220,
+      "params": 73346,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 9.59,
+      "best_epoch": 7,
+      "epochs_run": 15
+    },
+    {
+      "pipeline": "B PCA-LSTM",
+      "architecture": "LSTM",
+      "dim_reduction": "PCA",
+      "features": 26,
+      "params": 23682,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 6.64,
+      "best_epoch": 8,
+      "epochs_run": 16
+    },
+    {
+      "pipeline": "C LDA-LSTM",
+      "architecture": "LSTM",
+      "dim_reduction": "LDA multi",
+      "features": 3,
+      "params": 17794,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 3.52,
+      "best_epoch": 1,
+      "epochs_run": 9
+    },
+    {
+      "pipeline": "D LDA-BiLSTM",
+      "architecture": "BiLSTM",
+      "dim_reduction": "LDA multi",
+      "features": 3,
+      "params": 35586,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 6.5,
+      "best_epoch": 2,
+      "epochs_run": 10
+    },
+    {
+      "pipeline": "E CNN-BiLSTM+Attn",
+      "architecture": "CNN-BiLSTM-Attn",
+      "dim_reduction": "None",
+      "features": 220,
+      "params": 125762,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 11.43,
+      "best_epoch": 1,
+      "epochs_run": 9
+    }
+  ],
+  "selection_note": "All pipelines reach saturated detection metrics on this split; prefer edge trade-off: fewer features, fewer params, lower train/inference cost. Pipeline C (LDA-LSTM) is currently strongest efficiency candidate."
+}

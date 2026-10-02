@@ -1,0 +1,56 @@
+Session-aware split summary
+WINDOW_SIZE=10  STRIDE=1
+
+=== TRAIN ===
+                                 session_id  Attack_Group              Attack    State  n_rows
+               Benign||none||charging||none        Benign                none charging    1151
+                   Benign||none||idle||none        Benign                none     idle    1151
+Cryptojacking||cryptojacking||charging||any Cryptojacking       cryptojacking charging    1151
+   Cryptojacking||cryptojacking||idle||none Cryptojacking       cryptojacking     idle     642
+            DoS||icmp-flood||charging||ocpp           DoS          icmp-flood charging      67
+    DoS||icmp-fragmentation||charging||ocpp           DoS  icmp-fragmentation charging     125
+        DoS||icmp-fragmentation||idle||ocpp           DoS  icmp-fragmentation     idle      55
+            DoS||push-ack-flood||idle||ocpp           DoS      push-ack-flood     idle      65
+             DoS||syn-flood||charging||ocpp           DoS           syn-flood charging      63
+                 DoS||syn-flood||idle||ocpp           DoS           syn-flood     idle      63
+       DoS||synonymous-ip-flood||idle||ocpp           DoS synonymous-ip-flood     idle      62
+             DoS||tcp-flood||charging||ocpp           DoS           tcp-flood charging      62
+                 DoS||udp-flood||idle||ocpp           DoS           udp-flood     idle      59
+     Recon||aggressive-scan||charging||ocpp         Recon     aggressive-scan charging      60
+         Recon||aggressive-scan||idle||ocpp         Recon     aggressive-scan     idle      60
+       Recon||os-fingerprinting||idle||ocpp         Recon   os-fingerprinting     idle      61
+         Recon||os-scan||charging||iso15118         Recon             os-scan charging      59
+       Recon||port-scan||charging||iso15118         Recon           port-scan charging      82
+           Recon||port-scan||charging||ocpp         Recon           port-scan charging      58
+               Recon||port-scan||idle||ocpp         Recon           port-scan     idle      61
+   Recon||service-detection||charging||ocpp         Recon   service-detection charging      60
+     Recon||syn-stealth||charging||iso15118         Recon         syn-stealth charging      69
+         Recon||syn-stealth||charging||ocpp         Recon         syn-stealth charging      60
+       Recon||vuln-scan||charging||iso15118         Recon           vuln-scan charging      67
+           Recon||vuln-scan||charging||ocpp         Recon           vuln-scan charging      64
+               Recon||vuln-scan||idle||ocpp         Recon           vuln-scan     idle      61
+
+=== VAL ===
+                                  session_id  Attack_Group            Attack    State  n_rows
+                Benign||none||charging||none        Benign              none charging    1151
+                    Benign||none||idle||none        Benign              none     idle    1151
+ Cryptojacking||cryptojacking||charging||any Cryptojacking     cryptojacking charging    1151
+    Cryptojacking||cryptojacking||idle||none Cryptojacking     cryptojacking     idle     642
+         DoS||push-ack-flood||charging||ocpp           DoS    push-ack-flood charging      62
+              DoS||udp-flood||charging||ocpp           DoS         udp-flood charging      61
+Recon||service-detection||charging||iso15118         Recon service-detection charging      79
+        Recon||service-detection||idle||ocpp         Recon service-detection     idle      60
+                Recon||tcp-flood||idle||ocpp         Recon         tcp-flood     idle      61
+
+=== TEST ===
+                                 session_id  Attack_Group              Attack    State  n_rows
+               Benign||none||charging||none        Benign                none charging    1151
+                   Benign||none||idle||none        Benign                none     idle    1151
+Cryptojacking||cryptojacking||charging||any Cryptojacking       cryptojacking charging    1151
+   Cryptojacking||cryptojacking||idle||none Cryptojacking       cryptojacking     idle     642
+                DoS||icmp-flood||idle||ocpp           DoS          icmp-flood     idle      61
+   DoS||synonymous-ip-flood||charging||ocpp           DoS synonymous-ip-flood charging      60
+ Recon||aggressive-scan||charging||iso15118         Recon     aggressive-scan charging      62
+   Recon||os-fingerprinting||charging||ocpp         Recon   os-fingerprinting charging      62
+             Recon||syn-stealth||idle||ocpp         Recon         syn-stealth     idle      60
+

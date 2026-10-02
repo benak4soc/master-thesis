@@ -1,0 +1,50 @@
+{
+  "pipeline": "PIPELINE E \u2014 CNN-BiLSTM+Attention (power)",
+  "model_type": "cnn_bilstm_attention",
+  "device": "cpu",
+  "seq_dir": "processed_EVSE_B_Power\\sequences",
+  "n_params": 67490,
+  "window_features_shape": {
+    "timesteps": 10,
+    "features": 4
+  },
+  "hyperparameters": {
+    "hidden_size": 64,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "batch_size": 64,
+    "epochs_max": 40,
+    "epochs_run": 24,
+    "best_epoch": 16,
+    "learning_rate": 0.001,
+    "patience": 8,
+    "model_kwargs": {
+      "cnn_channels": 32,
+      "cnn_kernel": 3
+    },
+    "class_weights": {
+      "benign": 2.500119588615164,
+      "attack": 0.6249925261584455
+    }
+  },
+  "training_time_seconds": 109.14054570003645,
+  "best_val_f1": 0.9940273037542662,
+  "test_metrics": {
+    "loss": 0.03844083032478137,
+    "accuracy": 0.9837030330466274,
+    "precision": 0.9906462585034014,
+    "recall": 0.9889643463497453,
+    "f1": 0.989804587935429,
+    "roc_auc": 0.9987010476124629
+  },
+  "confusion_matrix": [
+    [
+      851,
+      33
+    ],
+    [
+      39,
+      3495
+    ]
+  ]
+}

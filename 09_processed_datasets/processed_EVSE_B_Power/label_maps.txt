@@ -1,0 +1,16 @@
+Binary target
+  0 = Benign
+  1 = Attack
+
+target_multiclass (Attack_Group)
+  0 = Benign
+  1 = Recon
+  2 = DoS
+  3 = Cryptojacking
+  4 = Backdoor
+
+target_attack_family (attack rows only)
+  0 = Recon
+  1 = DoS
+  2 = Cryptojacking
+  3 = Backdoor

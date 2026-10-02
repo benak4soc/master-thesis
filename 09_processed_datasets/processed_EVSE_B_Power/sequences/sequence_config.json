@@ -1,0 +1,49 @@
+{
+  "modality": "power_EVSE_B",
+  "window_size": 10,
+  "stride": 1,
+  "n_features": 4,
+  "max_per_group": 6000,
+  "features": [
+    "shunt_voltage",
+    "bus_voltage_V",
+    "current_mA",
+    "power_mW"
+  ],
+  "shapes": {
+    "train": {
+      "X": [
+        20906,
+        10,
+        4
+      ],
+      "y_binary_counts": {
+        "benign": 4181,
+        "attack": 16725
+      }
+    },
+    "val": {
+      "X": [
+        4406,
+        10,
+        4
+      ],
+      "y_binary_counts": {
+        "benign": 881,
+        "attack": 3525
+      }
+    },
+    "test": {
+      "X": [
+        4418,
+        10,
+        4
+      ],
+      "y_binary_counts": {
+        "benign": 884,
+        "attack": 3534
+      }
+    }
+  },
+  "note": "Includes Backdoor; full 5-class Attack_Group available for LDA."
+}

@@ -1,0 +1,47 @@
+{
+  "pipeline": "PIPELINE C \u2014 LDA-LSTM (power)",
+  "model_type": "lstm",
+  "device": "cpu",
+  "seq_dir": "processed_EVSE_B_Power\\sequences\\lda_multiclass",
+  "n_params": 18050,
+  "window_features_shape": {
+    "timesteps": 10,
+    "features": 4
+  },
+  "hyperparameters": {
+    "hidden_size": 64,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "batch_size": 64,
+    "epochs_max": 40,
+    "epochs_run": 30,
+    "best_epoch": 22,
+    "learning_rate": 0.001,
+    "patience": 8,
+    "model_kwargs": {},
+    "class_weights": {
+      "benign": 2.500119588615164,
+      "attack": 0.6249925261584455
+    }
+  },
+  "training_time_seconds": 73.5847929000156,
+  "best_val_f1": 0.9871232489033536,
+  "test_metrics": {
+    "loss": 0.09684802516163213,
+    "accuracy": 0.9723856948845632,
+    "precision": 0.9784071789119462,
+    "recall": 0.9872665534804754,
+    "f1": 0.9828169014084507,
+    "roc_auc": 0.9917688735413194
+  },
+  "confusion_matrix": [
+    [
+      807,
+      77
+    ],
+    [
+      45,
+      3489
+    ]
+  ]
+}

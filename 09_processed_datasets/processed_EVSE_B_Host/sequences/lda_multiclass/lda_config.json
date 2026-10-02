@@ -1,0 +1,26 @@
+{
+  "method": "LDA_multiclass",
+  "label_source": "target_multiclass / Attack_Group",
+  "classes_present": [
+    "Benign",
+    "Recon",
+    "DoS",
+    "Cryptojacking"
+  ],
+  "class_ids_present": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "n_components": 3,
+  "max_components_c_minus_1": 3,
+  "input_features": 220,
+  "fit_on": "train_timesteps_only",
+  "note": "Backdoor not present in EVSE-B host HPC file; LDA uses Benign/Recon/DoS/Cryptojacking when available.",
+  "explained_variance_ratio": [
+    0.9839856028556824,
+    0.011033897288143635,
+    0.004980457480996847
+  ]
+}

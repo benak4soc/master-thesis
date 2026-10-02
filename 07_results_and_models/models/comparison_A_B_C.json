@@ -1,0 +1,43 @@
+{
+  "comparison": [
+    {
+      "pipeline": "A LSTM",
+      "features": 220,
+      "params": 73346,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_s": 9.59,
+      "best_epoch": 7,
+      "epochs_run": 15
+    },
+    {
+      "pipeline": "B PCA-LSTM",
+      "features": 26,
+      "params": 23682,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_s": 6.64,
+      "best_epoch": 8,
+      "epochs_run": 16
+    },
+    {
+      "pipeline": "C LDA-LSTM",
+      "features": 3,
+      "params": 17794,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_s": 3.52,
+      "best_epoch": 1,
+      "epochs_run": 9
+    }
+  ]
+}

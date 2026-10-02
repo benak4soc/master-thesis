@@ -1,0 +1,249 @@
+{
+  "search_space": {
+    "hidden_size": [
+      16,
+      32,
+      64
+    ],
+    "num_layers": [
+      1,
+      2
+    ],
+    "dropout": [
+      0.1,
+      0.2,
+      0.3
+    ],
+    "learning_rate": [
+      0.001,
+      0.0005
+    ],
+    "batch_size": [
+      32,
+      64
+    ]
+  },
+  "best_config": {
+    "hidden_size": 16,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "learning_rate": 0.001,
+    "batch_size": 64
+  },
+  "best_n_params": 1378,
+  "best_val_metrics": {
+    "accuracy": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "best_test_metrics": {
+    "accuracy": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "best_latency_ms_per_window": 0.3953530004946515,
+  "best_selection_score": 99.97221044198459,
+  "leaderboard_top10": [
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.2,
+        "learning_rate": 0.001,
+        "batch_size": 64
+      },
+      "n_params": 1378,
+      "best_epoch": 4,
+      "epochs_run": 9,
+      "train_seconds": 2.5512047999654897,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.33295100030954927,
+      "selection_score": 99.97221044198459
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.3,
+        "learning_rate": 0.001,
+        "batch_size": 64
+      },
+      "n_params": 1378,
+      "best_epoch": 4,
+      "epochs_run": 9,
+      "train_seconds": 2.616341500019189,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.3359250002540648,
+      "selection_score": 99.9719531808206
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.1,
+        "learning_rate": 0.001,
+        "batch_size": 64
+      },
+      "n_params": 1378,
+      "best_epoch": 4,
+      "epochs_run": 9,
+      "train_seconds": 2.553150399995502,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.34469000005628914,
+      "selection_score": 99.97162024933053
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.1,
+        "learning_rate": 0.0005,
+        "batch_size": 64
+      },
+      "n_params": 1378,
+      "best_epoch": 7,
+      "epochs_run": 12,
+      "train_seconds": 3.50254140002653,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.3464620001614094,
+      "selection_score": 99.96994933099188
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.3,
+        "learning_rate": 0.0005,
+        "batch_size": 64
+      },
+      "n_params": 1378,
+      "best_epoch": 7,
+      "epochs_run": 12,
+      "train_seconds": 3.427128500014078,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.3530689998297021,
+      "selection_score": 99.96974466917516
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.2,
+        "learning_rate": 0.0005,
+        "batch_size": 64
+      },
+      "n_params": 1378,
+      "best_epoch": 7,
+      "epochs_run": 12,
+      "train_seconds": 3.4353775000199676,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.37325700046494603,
+      "selection_score": 99.96872152081005
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.2,
+        "learning_rate": 0.001,
+        "batch_size": 32
+      },
+      "n_params": 1378,
+      "best_epoch": 2,
+      "epochs_run": 7,
+      "train_seconds": 3.5256344999652356,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.38370100024621934,
+      "selection_score": 99.96804889248774
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.1,
+        "learning_rate": 0.001,
+        "batch_size": 32
+      },
+      "n_params": 1378,
+      "best_epoch": 2,
+      "epochs_run": 7,
+      "train_seconds": 3.3154087999719195,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.40230699989479035,
+      "selection_score": 99.96746896867198
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.2,
+        "learning_rate": 0.0005,
+        "batch_size": 32
+      },
+      "n_params": 1378,
+      "best_epoch": 4,
+      "epochs_run": 9,
+      "train_seconds": 4.177386199997272,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.3746560000581667,
+      "selection_score": 99.96741488966376
+    },
+    {
+      "config": {
+        "hidden_size": 16,
+        "num_layers": 1,
+        "dropout": 0.3,
+        "learning_rate": 0.0005,
+        "batch_size": 32
+      },
+      "n_params": 1378,
+      "best_epoch": 4,
+      "epochs_run": 9,
+      "train_seconds": 4.150107399967965,
+      "val_metrics": {
+        "accuracy": 1.0,
+        "f1": 1.0,
+        "roc_auc": 1.0
+      },
+      "latency_ms_per_window": 0.381500999792479,
+      "selection_score": 99.96711810434377
+    }
+  ],
+  "n_candidates": 72
+}

@@ -1,0 +1,25 @@
+{
+  "Benign": {
+    "n": 330,
+    "correct": 330,
+    "accuracy": 1.0
+  },
+  "Cryptojacking": {
+    "n": 253,
+    "detected": 253,
+    "missed": 0,
+    "detection_rate": 1.0
+  },
+  "DoS": {
+    "n": 103,
+    "detected": 103,
+    "missed": 0,
+    "detection_rate": 1.0
+  },
+  "Recon": {
+    "n": 157,
+    "detected": 157,
+    "missed": 0,
+    "detection_rate": 1.0
+  }
+}

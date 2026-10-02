@@ -1,0 +1,6 @@
+{
+  "method": "LDA_binary",
+  "n_components": 1,
+  "label_source": "y_binary",
+  "note": "Classical binary LDA yields at most 1 discriminant; included for thesis limitation discussion."
+}

@@ -1,0 +1,47 @@
+{
+  "pipeline": "PIPELINE A \u2014 LSTM (power, no DR)",
+  "model_type": "lstm",
+  "device": "cpu",
+  "seq_dir": "processed_EVSE_B_Power\\sequences",
+  "n_params": 18050,
+  "window_features_shape": {
+    "timesteps": 10,
+    "features": 4
+  },
+  "hyperparameters": {
+    "hidden_size": 64,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "batch_size": 64,
+    "epochs_max": 40,
+    "epochs_run": 35,
+    "best_epoch": 27,
+    "learning_rate": 0.001,
+    "patience": 8,
+    "model_kwargs": {},
+    "class_weights": {
+      "benign": 2.500119588615164,
+      "attack": 0.6249925261584455
+    }
+  },
+  "training_time_seconds": 95.7147695000167,
+  "best_val_f1": 0.9946068691456146,
+  "test_metrics": {
+    "loss": 0.0455673649782081,
+    "accuracy": 0.9834766862833861,
+    "precision": 0.9887037560011296,
+    "recall": 0.9906621392190152,
+    "f1": 0.9896819787985865,
+    "roc_auc": 0.9981106292588865
+  },
+  "confusion_matrix": [
+    [
+      844,
+      40
+    ],
+    [
+      33,
+      3501
+    ]
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "binary_pipelines_plotted": [
+    "host_A",
+    "host_B",
+    "host_C",
+    "host_D",
+    "host_E",
+    "network_A",
+    "network_C",
+    "power_A",
+    "power_B",
+    "power_C",
+    "power_E"
+  ],
+  "multiclass": {
+    "host": {
+      "accuracy": 1.0,
+      "precision_macro": 1.0,
+      "recall_macro": 1.0,
+      "f1_macro": 1.0,
+      "classes": [
+        "Benign",
+        "Recon",
+        "DoS",
+        "Cryptojacking"
+      ],
+      "present_original_ids": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "power": {
+      "accuracy": 0.801946582163875,
+      "precision_macro": 0.8213683496318225,
+      "recall_macro": 0.8017504437672505,
+      "f1_macro": 0.7905137991280183,
+      "classes": [
+        "Benign",
+        "Recon",
+        "DoS",
+        "Cryptojacking",
+        "Backdoor"
+      ],
+      "present_original_ids": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "network": {
+      "accuracy": 1.0,
+      "precision_macro": 1.0,
+      "recall_macro": 1.0,
+      "f1_macro": 1.0,
+      "classes": [
+        "Benign",
+        "Recon",
+        "DoS"
+      ],
+      "present_original_ids": [
+        0,
+        1,
+        2
+      ]
+    }
+  }
+}

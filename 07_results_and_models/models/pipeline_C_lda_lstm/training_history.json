@@ -1,0 +1,101 @@
+[
+  {
+    "epoch": 1,
+    "train_loss": 0.23185770615236834,
+    "train_f1": 0.9438485804416403,
+    "val_loss": 0.028414225139256035,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 2,
+    "train_loss": 0.012779192031302955,
+    "train_f1": 1.0,
+    "val_loss": 0.006982698995021305,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 3,
+    "train_loss": 0.004731911805720301,
+    "train_f1": 1.0,
+    "val_loss": 0.00424910310123648,
+    "val_accuracy": 0.9988290398126464,
+    "val_precision": 1.0,
+    "val_recall": 0.9981060606060606,
+    "val_f1": 0.9990521327014218,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 4,
+    "train_loss": 0.002498925281543052,
+    "train_f1": 1.0,
+    "val_loss": 0.0020434249433622298,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 5,
+    "train_loss": 0.0016290104904328473,
+    "train_f1": 1.0,
+    "val_loss": 0.0013727257485567992,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 6,
+    "train_loss": 0.0011906012896361062,
+    "train_f1": 1.0,
+    "val_loss": 0.0009823473311761127,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 7,
+    "train_loss": 0.0009422865559827187,
+    "train_f1": 1.0,
+    "val_loss": 0.000753919742627269,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 8,
+    "train_loss": 0.000747208311167924,
+    "train_f1": 1.0,
+    "val_loss": 0.0005992925757059961,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  },
+  {
+    "epoch": 9,
+    "train_loss": 0.0006335602661238227,
+    "train_f1": 1.0,
+    "val_loss": 0.0004999890318556156,
+    "val_accuracy": 1.0,
+    "val_precision": 1.0,
+    "val_recall": 1.0,
+    "val_f1": 1.0,
+    "val_roc_auc": 1.0
+  }
+]

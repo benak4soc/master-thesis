@@ -1,0 +1,44 @@
+{
+  "modality": "network_EVSE_A",
+  "window_size": 5,
+  "stride": 1,
+  "n_features": 71,
+  "max_attack_per_group": 4000,
+  "random_state": 42,
+  "shapes": {
+    "train": {
+      "X": [
+        5745,
+        5,
+        71
+      ],
+      "y_binary_counts": {
+        "benign": 48,
+        "attack": 5697
+      }
+    },
+    "val": {
+      "X": [
+        1293,
+        5,
+        71
+      ],
+      "y_binary_counts": {
+        "benign": 6,
+        "attack": 1287
+      }
+    },
+    "test": {
+      "X": [
+        931,
+        5,
+        71
+      ],
+      "y_binary_counts": {
+        "benign": 7,
+        "attack": 924
+      }
+    }
+  },
+  "note": "Attacks undersampled; all benign kept. Scores may still be optimistic due to imbalance / window overlap."
+}

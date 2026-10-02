@@ -1,0 +1,27 @@
+{
+  "selected_pipeline": "C_LDA_LSTM_tuned",
+  "best_config": {
+    "hidden_size": 16,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "learning_rate": 0.001,
+    "batch_size": 64
+  },
+  "n_params": 1378,
+  "test_metrics": {
+    "accuracy": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "pytorch_latency_ms_cpu": 0.3953530004946515,
+  "onnx_model_size_bytes": 7180,
+  "pt_model_size_bytes": 8877,
+  "onnx_model_size_kb": 7.01,
+  "jetson_todo": [
+    "Copy jetson_deploy/pipeline_C_lda_lstm to Jetson",
+    "pip install numpy joblib scikit-learn onnxruntime",
+    "python jetson_infer.py --demo",
+    "Optional: trtexec --onnx=lda_lstm.onnx --saveEngine=lda_lstm.trt --fp16",
+    "Record CPU/GPU/RAM/power on Jetson"
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "modality": "host",
+  "metrics": {
+    "accuracy": 1.0,
+    "precision_macro": 1.0,
+    "recall_macro": 1.0,
+    "f1_macro": 1.0,
+    "classes": [
+      "Benign",
+      "Recon",
+      "DoS",
+      "Cryptojacking"
+    ],
+    "present_original_ids": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "confusion_matrix": [
+    [
+      330,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      157,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      103,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      253
+    ]
+  ],
+  "classification_report": {
+    "Benign": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 330.0
+    },
+    "Recon": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 157.0
+    },
+    "DoS": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 103.0
+    },
+    "Cryptojacking": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 253.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 843.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 843.0
+    }
+  },
+  "roc_aucs": {
+    "Benign": 1.0,
+    "Recon": 1.0,
+    "DoS": 1.0,
+    "Cryptojacking": 1.0,
+    "macro_ovr": 1.0
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.6200379488291219,
+      "val_loss": 0.40561824132289204,
+      "val_macro_f1": 0.9085258552715413
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.04873905822751112,
+      "val_loss": 0.5027537706441113,
+      "val_macro_f1": 0.9061639923144831
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.01780243162647821,
+      "val_loss": 0.5673604192145701,
+      "val_macro_f1": 0.9061639923144831
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.009903536883939523,
+      "val_loss": 0.6160722180668797,
+      "val_macro_f1": 0.9061639923144831
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.0068357385898707435,
+      "val_loss": 0.6505330232404438,
+      "val_macro_f1": 0.9061639923144831
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.004889683026704006,
+      "val_loss": 0.6789045110178579,
+      "val_macro_f1": 0.9061639923144831
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.0037727213675680105,
+      "val_loss": 0.7026570900509667,
+      "val_macro_f1": 0.9061639923144831
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "modality": "power_EVSE_B",
+  "comparison": [
+    {
+      "pipeline": "PIPELINE A \u2014 LSTM (power, no DR)",
+      "model_type": "lstm",
+      "features": 4,
+      "params": 18050,
+      "accuracy": 0.9834766862833861,
+      "precision": 0.9887037560011296,
+      "recall": 0.9906621392190152,
+      "f1": 0.9896819787985865,
+      "roc_auc": 0.9981106292588865,
+      "train_seconds": 95.71
+    },
+    {
+      "pipeline": "PIPELINE B \u2014 PCA-LSTM (power)",
+      "model_type": "lstm",
+      "features": 1,
+      "params": 17282,
+      "accuracy": 0.9852874603893165,
+      "precision": 0.9914990082176254,
+      "recall": 0.9900962082625919,
+      "f1": 0.9907971117089056,
+      "roc_auc": 0.9983758293705361,
+      "train_seconds": 99.13
+    },
+    {
+      "pipeline": "PIPELINE C \u2014 LDA-LSTM (power)",
+      "model_type": "lstm",
+      "features": 4,
+      "params": 18050,
+      "accuracy": 0.9723856948845632,
+      "precision": 0.9784071789119462,
+      "recall": 0.9872665534804754,
+      "f1": 0.9828169014084507,
+      "roc_auc": 0.9917688735413194,
+      "train_seconds": 73.58
+    },
+    {
+      "pipeline": "PIPELINE D \u2014 LDA-BiLSTM (power)",
+      "model_type": "bilstm",
+      "features": 4,
+      "params": 36098,
+      "accuracy": 0.9778180172023541,
+      "precision": 0.9836711711711712,
+      "recall": 0.9886813808715337,
+      "f1": 0.986169912503528,
+      "roc_auc": 0.9894291267506088,
+      "train_seconds": 92.64
+    },
+    {
+      "pipeline": "PIPELINE E \u2014 CNN-BiLSTM+Attention (power)",
+      "model_type": "cnn_bilstm_attention",
+      "features": 4,
+      "params": 67490,
+      "accuracy": 0.9837030330466274,
+      "precision": 0.9906462585034014,
+      "recall": 0.9889643463497453,
+      "f1": 0.989804587935429,
+      "roc_auc": 0.9987010476124629,
+      "train_seconds": 109.14
+    }
+  ],
+  "note": "Power has only 4 raw features but includes Backdoor. LDA uses full Attack_Group (5 classes)."
+}

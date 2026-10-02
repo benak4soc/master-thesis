@@ -1,0 +1,66 @@
+{
+  "modality": "network_EVSE_A",
+  "comparison": [
+    {
+      "pipeline": "PIPELINE A \u2014 LSTM (network, no DR)",
+      "model_type": "lstm",
+      "features": 71,
+      "params": 35202,
+      "accuracy": 0.9978517722878625,
+      "precision": 1.0,
+      "recall": 0.9978354978354979,
+      "f1": 0.9989165763813651,
+      "roc_auc": 1.0,
+      "train_seconds": 5.26
+    },
+    {
+      "pipeline": "PIPELINE B \u2014 PCA-LSTM (network)",
+      "model_type": "lstm",
+      "features": 17,
+      "params": 21378,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 4.59
+    },
+    {
+      "pipeline": "PIPELINE C \u2014 LDA-LSTM (network)",
+      "model_type": "lstm",
+      "features": 2,
+      "params": 17538,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 4.48
+    },
+    {
+      "pipeline": "PIPELINE D \u2014 LDA-BiLSTM (network)",
+      "model_type": "bilstm",
+      "features": 2,
+      "params": 35074,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 7.08
+    },
+    {
+      "pipeline": "PIPELINE E \u2014 CNN-BiLSTM+Attention (network)",
+      "model_type": "cnn_bilstm_attention",
+      "features": 71,
+      "params": 97154,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "train_seconds": 10.77
+    }
+  ],
+  "note": "Trained on undersampled network windows (all benign kept). Compare with host results separately."
+}

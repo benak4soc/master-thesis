@@ -1,0 +1,10 @@
+{
+  "n_components": 2,
+  "classes": [
+    "Benign",
+    "Recon",
+    "DoS"
+  ],
+  "input_features": 71,
+  "note": "Network modality typically has Benign/Recon/DoS only."
+}

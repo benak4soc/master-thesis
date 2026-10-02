@@ -1,0 +1,44 @@
+{
+  "pipeline": "PIPELINE B \u2014 PCA-LSTM",
+  "device": "cpu",
+  "seq_dir": "processed_EVSE_B_Host\\sequences\\pca",
+  "window_features_shape": {
+    "timesteps": 10,
+    "features": 26
+  },
+  "hyperparameters": {
+    "hidden_size": 64,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "batch_size": 64,
+    "epochs_max": 40,
+    "epochs_run": 16,
+    "best_epoch": 8,
+    "learning_rate": 0.001,
+    "patience": 8,
+    "class_weights": {
+      "benign": 1.2792085427135678,
+      "attack": 0.820838371624345
+    }
+  },
+  "training_time_seconds": 6.639055599982385,
+  "best_val_f1": 0.9981060606060606,
+  "test_metrics": {
+    "loss": 0.0003441632850029107,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "confusion_matrix": [
+    [
+      330,
+      0
+    ],
+    [
+      0,
+      513
+    ]
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "n_components": 4,
+  "classes": [
+    "Benign",
+    "Recon",
+    "DoS",
+    "Cryptojacking",
+    "Backdoor"
+  ],
+  "input_features": 4,
+  "note": "Power modality includes Backdoor for full 5-class LDA.",
+  "explained_variance_ratio": [
+    0.9854259490966797,
+    0.014552791602909565,
+    2.0377177861519158e-05,
+    1.0000643442253931e-06
+  ]
+}

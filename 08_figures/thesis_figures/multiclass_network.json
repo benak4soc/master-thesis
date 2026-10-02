@@ -1,0 +1,119 @@
+{
+  "modality": "network",
+  "metrics": {
+    "accuracy": 1.0,
+    "precision_macro": 1.0,
+    "recall_macro": 1.0,
+    "f1_macro": 1.0,
+    "classes": [
+      "Benign",
+      "Recon",
+      "DoS"
+    ],
+    "present_original_ids": [
+      0,
+      1,
+      2
+    ]
+  },
+  "confusion_matrix": [
+    [
+      7,
+      0,
+      0
+    ],
+    [
+      0,
+      311,
+      0
+    ],
+    [
+      0,
+      0,
+      613
+    ]
+  ],
+  "classification_report": {
+    "Benign": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 7.0
+    },
+    "Recon": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 311.0
+    },
+    "DoS": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 613.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 931.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 931.0
+    }
+  },
+  "roc_aucs": {
+    "Benign": 1.0,
+    "Recon": 1.0,
+    "DoS": 1.0,
+    "macro_ovr": 1.0
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_loss": 0.4624427436126603,
+      "val_loss": 0.05626467562147549,
+      "val_macro_f1": 0.9694630515683147
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.04017112076075541,
+      "val_loss": 0.021949485786968752,
+      "val_macro_f1": 0.9694630515683147
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.01363773371817337,
+      "val_loss": 0.017781617230780068,
+      "val_macro_f1": 0.9694630515683147
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.007878961134701967,
+      "val_loss": 0.017933905928484387,
+      "val_macro_f1": 0.9694630515683147
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.00566798661602661,
+      "val_loss": 0.017330365649069705,
+      "val_macro_f1": 0.9694630515683147
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.0036744326650578942,
+      "val_loss": 0.0157806536105151,
+      "val_macro_f1": 0.9694630515683147
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.002163530426979479,
+      "val_loss": 0.01121970918306726,
+      "val_macro_f1": 0.9694630515683147
+    }
+  ]
+}

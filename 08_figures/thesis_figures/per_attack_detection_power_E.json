@@ -1,0 +1,31 @@
+{
+  "Backdoor": {
+    "n": 884,
+    "detected": 847,
+    "missed": 37,
+    "detection_rate": 0.9581447963800905
+  },
+  "Benign": {
+    "n": 884,
+    "correct": 851,
+    "accuracy": 0.9626696832579186
+  },
+  "Cryptojacking": {
+    "n": 884,
+    "detected": 884,
+    "missed": 0,
+    "detection_rate": 1.0
+  },
+  "DoS": {
+    "n": 882,
+    "detected": 880,
+    "missed": 2,
+    "detection_rate": 0.9977324263038548
+  },
+  "Recon": {
+    "n": 884,
+    "detected": 884,
+    "missed": 0,
+    "detection_rate": 1.0
+  }
+}

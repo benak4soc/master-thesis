@@ -1,0 +1,19 @@
+{
+  "Benign": {
+    "n": 7,
+    "correct": 7,
+    "accuracy": 1.0
+  },
+  "DoS": {
+    "n": 613,
+    "detected": 613,
+    "missed": 0,
+    "detection_rate": 1.0
+  },
+  "Recon": {
+    "n": 311,
+    "detected": 311,
+    "missed": 0,
+    "detection_rate": 1.0
+  }
+}

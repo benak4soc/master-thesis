@@ -1,0 +1,47 @@
+{
+  "pipeline": "PIPELINE B \u2014 PCA-LSTM (network)",
+  "model_type": "lstm",
+  "device": "cpu",
+  "seq_dir": "processed_EVSE_A\\sequences\\pca",
+  "n_params": 21378,
+  "window_features_shape": {
+    "timesteps": 5,
+    "features": 17
+  },
+  "hyperparameters": {
+    "hidden_size": 64,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "batch_size": 64,
+    "epochs_max": 40,
+    "epochs_run": 9,
+    "best_epoch": 1,
+    "learning_rate": 0.001,
+    "patience": 8,
+    "model_kwargs": {},
+    "class_weights": {
+      "benign": 59.84375,
+      "attack": 0.5042127435492364
+    }
+  },
+  "training_time_seconds": 4.587271199969109,
+  "best_val_f1": 1.0,
+  "test_metrics": {
+    "loss": 0.025438834447413683,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "confusion_matrix": [
+    [
+      7,
+      0
+    ],
+    [
+      0,
+      924
+    ]
+  ]
+}

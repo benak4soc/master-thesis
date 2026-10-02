@@ -1,0 +1,14 @@
+{
+  "output_root": "figures\\publication_extras",
+  "categories": [
+    "precision_recall",
+    "metric_bars",
+    "efficiency",
+    "learning_curves",
+    "dimensionality_reduction",
+    "distributions",
+    "multiclass",
+    "heatmap"
+  ],
+  "n_models": 15
+}

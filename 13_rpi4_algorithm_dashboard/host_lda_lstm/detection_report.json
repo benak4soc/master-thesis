@@ -1,0 +1,61 @@
+{
+  "target": "Raspberry Pi 4 (CPU, NumPy)",
+  "evse_role": "RPi4 is the EVSE host and runs this detector on its own counters",
+  "n_params": 1378,
+  "weights_npz_bytes": 9581,
+  "max_abs_lda_error": 0.0001543275530622168,
+  "max_abs_logit_error_vs_torch": 5.185604095458984e-06,
+  "prediction_agreement_vs_torch": 1.0,
+  "threshold": 0.5,
+  "test_metrics": {
+    "n": 843,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0,
+    "confusion_matrix": [
+      [
+        330,
+        0
+      ],
+      [
+        0,
+        513
+      ]
+    ]
+  },
+  "per_family": {
+    "Benign": {
+      "n": 330,
+      "correct": 330,
+      "rate": 1.0,
+      "meaning": "specificity"
+    },
+    "Recon": {
+      "n": 157,
+      "detected": 157,
+      "missed": 0,
+      "recall": 1.0
+    },
+    "DoS": {
+      "n": 103,
+      "detected": 103,
+      "missed": 0,
+      "recall": 1.0
+    },
+    "Cryptojacking": {
+      "n": 253,
+      "detected": 253,
+      "missed": 0,
+      "recall": 1.0
+    }
+  },
+  "latency_ms_per_window_this_pc": 0.8310809987597167,
+  "windows_per_second_this_pc": 1203.2521517064804,
+  "checkpoint_test_metrics": {
+    "accuracy": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  }
+}

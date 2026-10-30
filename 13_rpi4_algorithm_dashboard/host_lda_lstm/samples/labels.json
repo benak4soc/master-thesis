@@ -1,0 +1,18 @@
+{
+  "benign": {
+    "index": 0,
+    "y_binary": 0
+  },
+  "recon": {
+    "index": 686,
+    "y_binary": 1
+  },
+  "dos": {
+    "index": 583,
+    "y_binary": 1
+  },
+  "cryptojacking": {
+    "index": 330,
+    "y_binary": 1
+  }
+}

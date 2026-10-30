@@ -1,16 +1,17 @@
 # ============================================================
 # Jetson Nano / edge inference — Pipeline C (LDA-LSTM)
 #
-# Usage (on PC or Jetson):
-#   python jetson_infer.py --demo
-#   python jetson_infer.py --input window.npy
+# Usage:
+#   python3 jetson_infer.py --demo
+#   python3 jetson_infer.py --input window.npy
 #
-# window.npy shape: (timesteps, raw_features)  OR
-#                   (batch, timesteps, raw_features)
-#
-# Pipeline:
-#   raw features -> StandardScaler -> LDA -> ONNX LSTM -> probs
+# Prefers:
+#   1) preprocess_numpy.npz  (avoids sklearn version issues)
+#   2) PyTorch best_lstm.pt  (Jetson-friendly; onnxruntime pip
+#      wheels often crash with Illegal instruction on Nano)
 # ============================================================
+
+from __future__ import print_function
 
 import argparse
 import json
@@ -19,7 +20,6 @@ import time
 import warnings
 
 import numpy as np
-import joblib
 
 warnings.filterwarnings("ignore")
 
@@ -38,54 +38,102 @@ def default_deploy_dir():
     )
 
 
+def load_meta(deploy_dir):
+    with open(os.path.join(deploy_dir, "model_meta.json"), "r") as handle:
+        return json.load(handle)
+
+
+def load_preprocess(deploy_dir):
+    npz_path = os.path.join(deploy_dir, "preprocess_numpy.npz")
+    if os.path.isfile(npz_path):
+        data = np.load(npz_path)
+        return {
+            "mode": "numpy",
+            "mean": data["scaler_mean"].astype(np.float32),
+            "scale": data["scaler_scale"].astype(np.float32),
+            "xbar": data["lda_xbar"].astype(np.float32),
+            "scalings": data["lda_scalings"].astype(np.float32),
+        }
+
+    import joblib
+
+    scaler = joblib.load(os.path.join(deploy_dir, "scaler.joblib"))
+    lda = joblib.load(os.path.join(deploy_dir, "lda.joblib"))
+    return {"mode": "sklearn", "scaler": scaler, "lda": lda}
+
+
 def load_artifacts(deploy_dir):
-    meta_path = os.path.join(deploy_dir, "model_meta.json")
-    with open(meta_path, encoding="utf-8") as handle:
-        meta = json.load(handle)
-
-    scaler = joblib.load(
-        os.path.join(deploy_dir, "scaler.joblib")
-    )
-    lda = joblib.load(
-        os.path.join(deploy_dir, "lda.joblib")
-    )
-
-    feature_path = os.path.join(
-        deploy_dir,
-        "feature_columns.txt",
-    )
-    with open(feature_path, encoding="utf-8") as handle:
-        feature_columns = [
-            ln.strip() for ln in handle if ln.strip()
-        ]
-
+    """Kept for the section 11 desktop GUI: meta, scaler, lda, feature names, onnx path."""
+    meta = load_meta(deploy_dir)
+    prep = load_preprocess(deploy_dir)
+    feature_path = os.path.join(deploy_dir, "feature_columns.txt")
+    features = []
+    if os.path.isfile(feature_path):
+        with open(feature_path, "r") as handle:
+            features = [ln.strip() for ln in handle if ln.strip()]
     onnx_path = os.path.join(deploy_dir, "lda_lstm.onnx")
+    return meta, prep.get("scaler"), prep.get("lda"), features, onnx_path
 
-    return meta, scaler, lda, feature_columns, onnx_path
 
-
-def preprocess_windows(raw_x, scaler, lda):
-    """
-    raw_x: (T, F) or (B, T, F) raw host features (unscaled)
-    returns: (B, T, lda_dim) float32
-    """
-
+def preprocess_windows(raw_x, prep):
     x = np.asarray(raw_x, dtype=np.float32)
-
     if x.ndim == 2:
         x = x[None, ...]
-
     if x.ndim != 3:
-        raise ValueError(
-            f"Expected (T,F) or (B,T,F), got {x.shape}"
-        )
+        raise ValueError("Expected (T,F) or (B,T,F), got %s" % (x.shape,))
 
     b, t, f = x.shape
-    flat = x.reshape(-1, f)
-    flat = np.nan_to_num(flat, nan=0.0, posinf=0.0, neginf=0.0)
-    scaled = scaler.transform(flat)
-    reduced = lda.transform(scaled).astype(np.float32)
-    return reduced.reshape(b, t, -1)
+    flat = x.reshape(-1, f).astype(np.float32)
+    # numpy 1.13 (Jetson apt) has limited nan_to_num kwargs
+    flat = np.nan_to_num(flat)
+    flat[np.isinf(flat)] = 0.0
+
+    if prep["mode"] == "numpy":
+        scaled = (flat - prep["mean"]) / prep["scale"]
+        reduced = (scaled - prep["xbar"]).dot(prep["scalings"])
+    else:
+        scaled = prep["scaler"].transform(flat)
+        reduced = prep["lda"].transform(scaled)
+
+    return reduced.astype(np.float32).reshape(b, t, -1)
+
+
+class BaselineLSTMTorch(object):
+    def __init__(self, n_features, hidden_size, num_layers, dropout, n_classes=2):
+        import torch
+        import torch.nn as nn
+
+        class _M(nn.Module):
+            def __init__(self):
+                super(_M, self).__init__()
+                self.lstm = nn.LSTM(
+                    input_size=n_features,
+                    hidden_size=hidden_size,
+                    num_layers=num_layers,
+                    batch_first=True,
+                    dropout=dropout if num_layers > 1 else 0.0,
+                )
+                self.dropout = nn.Dropout(dropout)
+                self.fc = nn.Linear(hidden_size, n_classes)
+
+            def forward(self, x):
+                _, (h_n, _) = self.lstm(x)
+                return self.fc(self.dropout(h_n[-1]))
+
+        self.torch = torch
+        self.model = _M()
+
+    def load(self, ckpt_path, map_location="cpu"):
+        ckpt = self.torch.load(ckpt_path, map_location=map_location)
+        state = ckpt["model_state"] if isinstance(ckpt, dict) and "model_state" in ckpt else ckpt
+        self.model.load_state_dict(state)
+        self.model.eval()
+
+    def __call__(self, x_lda):
+        with self.torch.no_grad():
+            t = self.torch.from_numpy(x_lda.astype(np.float32))
+            logits = self.model(t).cpu().numpy()
+        return logits
 
 
 def run_onnx(onnx_path, x_lda):
@@ -96,11 +144,7 @@ def run_onnx(onnx_path, x_lda):
         providers=["CPUExecutionProvider"],
     )
     input_name = session.get_inputs()[0].name
-    logits = session.run(
-        None,
-        {input_name: x_lda.astype(np.float32)},
-    )[0]
-    return logits
+    return session.run(None, {input_name: x_lda.astype(np.float32)})[0]
 
 
 def softmax(logits):
@@ -109,28 +153,57 @@ def softmax(logits):
     return e / e.sum(axis=1, keepdims=True)
 
 
-def predict(raw_x, deploy_dir, benchmark_runs=0):
-    meta, scaler, lda, _, onnx_path = load_artifacts(
-        deploy_dir
-    )
+def build_backend(deploy_dir, meta):
+    # Try ONNX first, then PyTorch
+    onnx_path = os.path.join(deploy_dir, "lda_lstm.onnx")
+    ckpt_path = os.path.join(deploy_dir, "best_lstm.pt")
 
-    x_lda = preprocess_windows(raw_x, scaler, lda)
-    logits = run_onnx(onnx_path, x_lda)
+    try:
+        import onnxruntime  # noqa: F401
+
+        def _infer(x):
+            return run_onnx(onnx_path, x)
+
+        # smoke
+        smoke = np.zeros((1, int(meta["n_timesteps"]), int(meta["n_features_lda"])), np.float32)
+        _ = _infer(smoke)
+        return "onnx", _infer
+    except Exception as exc:
+        print("ONNX backend unavailable (%s); trying PyTorch..." % exc)
+
+    model = BaselineLSTMTorch(
+        n_features=int(meta["n_features_lda"]),
+        hidden_size=int(meta.get("hidden_size", 16)),
+        num_layers=int(meta.get("num_layers", 1)),
+        dropout=float(meta.get("dropout", 0.2)),
+        n_classes=2,
+    )
+    model.load(ckpt_path, map_location="cpu")
+
+    def _infer(x):
+        return model(x)
+
+    return "torch", _infer
+
+
+def predict(raw_x, deploy_dir, benchmark_runs=0):
+    meta = load_meta(deploy_dir)
+    prep = load_preprocess(deploy_dir)
+    backend_name, infer_fn = build_backend(deploy_dir, meta)
+
+    x_lda = preprocess_windows(raw_x, prep)
+    logits = infer_fn(x_lda)
     probs = softmax(logits)
     preds = probs.argmax(axis=1)
 
     latency_ms = None
     if benchmark_runs > 0:
-        # warmup
-        for _ in range(10):
-            _ = run_onnx(onnx_path, x_lda)
-
-        start = time.perf_counter()
+        for _ in range(5):
+            _ = infer_fn(x_lda)
+        start = time.time()
         for _ in range(benchmark_runs):
-            _ = run_onnx(onnx_path, x_lda)
-        latency_ms = (
-            (time.perf_counter() - start) / benchmark_runs
-        ) * 1000.0
+            _ = infer_fn(x_lda)
+        latency_ms = ((time.time() - start) / float(benchmark_runs)) * 1000.0
 
     return {
         "preds": preds,
@@ -139,78 +212,48 @@ def predict(raw_x, deploy_dir, benchmark_runs=0):
         "latency_ms": latency_ms,
         "meta": meta,
         "x_lda_shape": x_lda.shape,
+        "backend": backend_name,
+        "preprocess": prep["mode"],
     }
 
 
-def demo(deploy_dir, benchmark_runs=100):
-    meta, _, _, feature_columns, _ = load_artifacts(
-        deploy_dir
-    )
-
+def demo(deploy_dir, benchmark_runs=50):
+    meta = load_meta(deploy_dir)
     t = int(meta["n_timesteps"])
     f = int(meta["n_features_raw"])
+    rng = np.random.RandomState(0)
+    raw = rng.randn(t, f).astype(np.float32)
 
-    # Synthetic demo window (replace with real host features)
-    rng = np.random.default_rng(0)
-    raw = rng.normal(size=(t, f)).astype(np.float32)
-
-    result = predict(
-        raw,
-        deploy_dir,
-        benchmark_runs=benchmark_runs,
-    )
+    result = predict(raw, deploy_dir, benchmark_runs=benchmark_runs)
+    pred = int(result["preds"][0])
+    label = meta["label_map"][str(pred)]
 
     print("=" * 70)
     print("JETSON / EDGE INFERENCE DEMO — Pipeline C")
     print("=" * 70)
-    print(f"Deploy dir   : {deploy_dir}")
-    print(f"Raw shape    : {(t, f)}")
-    print(f"LDA shape    : {result['x_lda_shape']}")
+    print("Deploy dir   :", deploy_dir)
+    print("Preprocess   :", result["preprocess"])
+    print("Backend      :", result["backend"])
+    print("Raw shape    :", (t, f))
+    print("LDA shape    :", result["x_lda_shape"])
+    print("Prediction   : %d (%s)" % (pred, label))
     print(
-        f"Prediction   : {int(result['preds'][0])} "
-        f"({meta['label_map'][str(int(result['preds'][0]))]})"
+        "Probabilities: Benign=%.4f  Attack=%.4f"
+        % (result["probs"][0, 0], result["probs"][0, 1])
     )
-    print(
-        f"Probabilities: Benign={result['probs'][0, 0]:.4f}  "
-        f"Attack={result['probs'][0, 1]:.4f}"
-    )
-
     if result["latency_ms"] is not None:
         print(
-            f"ONNX latency : {result['latency_ms']:.3f} ms "
-            f"/ window (CPU ORT, {benchmark_runs} runs)"
+            "Latency      : %.3f ms / window (%d runs)"
+            % (result["latency_ms"], benchmark_runs)
         )
-
-    print(
-        "\nOn Jetson Nano, optionally convert ONNX -> TensorRT "
-        "with trtexec for lower latency."
-    )
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="EVSE LDA-LSTM edge inference"
-    )
-    parser.add_argument(
-        "--deploy-dir",
-        default=default_deploy_dir(),
-        help="Path to jetson_deploy/pipeline_C_lda_lstm",
-    )
-    parser.add_argument(
-        "--input",
-        default=None,
-        help="Path to .npy window array (T,F) or (B,T,F)",
-    )
-    parser.add_argument(
-        "--demo",
-        action="store_true",
-        help="Run synthetic demo + latency benchmark",
-    )
-    parser.add_argument(
-        "--benchmark-runs",
-        type=int,
-        default=100,
-    )
+    parser = argparse.ArgumentParser(description="EVSE LDA-LSTM edge inference")
+    parser.add_argument("--deploy-dir", default=default_deploy_dir())
+    parser.add_argument("--input", default=None)
+    parser.add_argument("--demo", action="store_true")
+    parser.add_argument("--benchmark-runs", type=int, default=50)
     args = parser.parse_args()
 
     if args.demo or args.input is None:
@@ -218,25 +261,15 @@ def main():
         return
 
     raw = np.load(args.input)
-    result = predict(
-        raw,
-        args.deploy_dir,
-        benchmark_runs=args.benchmark_runs,
-    )
-
-    for i, (pred, prob) in enumerate(
-        zip(result["preds"], result["probs"])
-    ):
+    result = predict(raw, args.deploy_dir, benchmark_runs=args.benchmark_runs)
+    for i, (pred, prob) in enumerate(zip(result["preds"], result["probs"])):
         label = result["meta"]["label_map"][str(int(pred))]
         print(
-            f"[{i}] pred={int(pred)} ({label})  "
-            f"p_benign={prob[0]:.4f} p_attack={prob[1]:.4f}"
+            "[%d] pred=%d (%s)  p_benign=%.4f p_attack=%.4f"
+            % (i, int(pred), label, prob[0], prob[1])
         )
-
     if result["latency_ms"] is not None:
-        print(
-            f"latency_ms={result['latency_ms']:.3f}"
-        )
+        print("latency_ms=%.3f backend=%s" % (result["latency_ms"], result["backend"]))
 
 
 if __name__ == "__main__":

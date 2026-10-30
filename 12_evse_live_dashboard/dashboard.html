@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EVSE attack detection</title>
+<style>
+  :root {
+    --bg: #101411;
+    --card: #18201c;
+    --line: #2c3a33;
+    --text: #e8f2ec;
+    --muted: #8ea497;
+    --ok: #3ecf8e;
+    --dos: #ff5d5d;
+    --rom: #ffb020;
+    --crypto: #79b8ff;
+    --idle: #c5d0c8;
+    --lime: #dff25a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.35 "Segoe UI", "DejaVu Sans", sans-serif;
+  }
+  button, select { font: inherit; color: inherit; }
+  header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    background: #101411;
+    z-index: 2;
+  }
+  .top {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 18px;
+    align-items: center;
+  }
+  .badge {
+    min-width: 280px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    background: #121a16;
+  }
+  .badge b { display: block; font-size: 26px; letter-spacing: 0.02em; }
+  .badge span, .muted { color: var(--muted); }
+  .badge.ok b { color: var(--ok); }
+  .badge.bad b { color: var(--dos); }
+  .badge.idle b { color: var(--idle); }
+  .meta { display: flex; gap: 22px; flex-wrap: wrap; }
+  .meta div b { display: block; font-size: 16px; font-weight: 650; }
+  .kicker { color: var(--muted); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+  main { padding: 14px 18px 24px; display: grid; gap: 12px; }
+  .legend { margin: 6px 0 0; font-size: 12px; }
+  .grid-3 { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1.15fr 0.85fr 1fr; gap: 12px; }
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 12px;
+    min-width: 0;
+  }
+  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lime); }
+  .big { font-size: 28px; font-variant-numeric: tabular-nums; }
+  .row { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; }
+  .bar { height: 8px; background: #0d1310; margin: 2px 0 8px; }
+  .bar i { display: block; height: 100%; }
+  .okc { background: var(--ok); }
+  .dosc { background: var(--dos); }
+  .romc { background: var(--rom); }
+  .cryc { background: var(--crypto); }
+  canvas { width: 100%; height: 120px; display: block; background: #101612; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #24302a; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .scroll { max-height: 220px; overflow: auto; }
+  tr.Benign td:nth-child(2) { color: var(--ok); }
+  tr.DoS td:nth-child(2) { color: var(--dos); }
+  tr.RomCom td:nth-child(2) { color: var(--rom); }
+  tr.Cryptojacking td:nth-child(2) { color: var(--crypto); }
+  tr.Attack td:nth-child(2) { color: var(--dos); }
+  .filters { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .filters button, .controls button, .mit button {
+    background: #101612;
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  .filters button.on, .controls button.on, .mit button.on { border-color: var(--lime); color: var(--lime); }
+  .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+  .nums b { display: block; font-size: 18px; }
+  .banner {
+    display: none;
+    margin: 0 18px;
+    padding: 10px 12px;
+    background: #3a1616;
+    border: 1px solid #ff5d5d;
+    color: #ffd0d0;
+  }
+  .banner.show { display: block; }
+  .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .controls button.scenario { padding: 8px 12px; background: #18241c; border: 1px solid var(--line); cursor: pointer; }
+  .controls button.go { background: var(--lime); color: #15200a; border: 0; font-weight: 700; }
+  input[type="text"] { background: #101612; border: 1px solid var(--line); color: var(--text); padding: 7px 8px; width: 220px; }
+  .pill { display: inline-block; padding: 2px 6px; border: 1px solid var(--line); font-size: 12px; }
+  .pill.warn { color: var(--rom); border-color: var(--rom); }
+  .cm { display: grid; grid-template-columns: 92px 1fr 1fr; gap: 4px; font-variant-numeric: tabular-nums; }
+  .cm b { background: #101612; padding: 6px; text-align: center; }
+  @media (max-width: 1100px) {
+    .grid-3, .grid-2, .top { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+  <div id="badge" class="badge idle">
+    <span class="kicker">EVSE detector</span>
+    <b id="badge-text">Standby</b>
+    <span id="badge-sub">Pipeline C has not started</span>
+  </div>
+  <div class="meta">
+    <div><span class="kicker">EVSE state</span><b id="evse">Idle</b></div>
+    <div><span class="kicker">Uptime</span><b id="uptime">0s</b></div>
+    <div><span class="kicker">Model</span><b id="model">Pipeline C LDA-LSTM</b><span id="version"></span></div>
+    <div><span class="kicker">Latency</span><b id="latency">—</b></div>
+  </div>
+  <div>
+    <span class="kicker">Action</span>
+    <b id="action">none</b>
+  </div>
+  </div>
+  <div class="controls">
+    <button class="scenario go" id="btn-start">Start</button>
+    <button class="scenario" id="btn-stop">Stop</button>
+    <button class="scenario" data-scenario="benign">Run Benign</button>
+    <button class="scenario" data-scenario="dos">Simulate DoS</button>
+    <button class="scenario" data-scenario="romcom">Simulate RomCom</button>
+    <button class="scenario" data-scenario="cryptojacking">Simulate Cryptojacking</button>
+    <span class="mit" id="mit">
+      <button data-mit="off" class="on">Mitigation off</button>
+      <button data-mit="block">Block IP</button>
+      <button data-mit="throttle">Throttle</button>
+      <button data-mit="isolate">Isolate EVSE</button>
+    </span>
+    <label><input id="sound" type="checkbox" /> sound</label>
+    <input id="npy" type="text" placeholder="replay .npy window" />
+    <button class="scenario" id="btn-npy">Load</button>
+  </div>
+</header>
+<div id="banner" class="banner"></div>
+<main>
+  <div class="grid-3">
+    <section>
+      <h2>Live detection</h2>
+      <div class="row"><span id="pred-name">—</span><b id="pred-conf">—</b></div>
+      <div id="bars"></div>
+      <canvas id="prob-chart" width="640" height="160"></canvas>
+      <p class="legend muted">Green Benign · red DoS · amber RomCom · blue Cryptojacking</p>
+      <p class="muted" id="model-note">Family label is the scenario in replay. The ONNX model outputs Benign or Attack.</p>
+    </section>
+    <section>
+      <h2>Jetson host</h2>
+      <div class="nums">
+        <div><span class="kicker">CPU</span><b id="cpu">—</b></div>
+        <div><span class="kicker">Temp</span><b id="temp">—</b></div>
+        <div><span class="kicker">RAM</span><b id="ram">—</b></div>
+        <div><span class="kicker">Clock</span><b id="clock">—</b></div>
+      </div>
+      <div id="cores"></div>
+      <div class="row"><span>Throttling</span><b id="throttle">No</b></div>
+      <canvas id="host-chart" width="480" height="160"></canvas>
+      <p class="legend muted">Yellow CPU % · red temperature °C</p>
+    </section>
+    <section>
+      <h2>Network</h2>
+      <div class="nums">
+        <div><span class="kicker">Packets/s</span><b id="pps">—</b></div>
+        <div><span class="kicker">Bytes/s</span><b id="bps">—</b></div>
+        <div><span class="kicker">Connections</span><b id="conns">—</b></div>
+        <div><span class="kicker">SYN half-open</span><b id="syn">—</b></div>
+      </div>
+      <canvas id="net-chart" width="480" height="160"></canvas>
+      <p class="legend muted">Blue packets/s · amber kB/s</p>
+      <table id="talkers"></table>
+    </section>
+  </div>
+
+  <section>
+    <h2>Attack timeline</h2>
+    <div class="filters" id="filters"></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Class</th><th>Confidence</th><th>Source</th><th>Action</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <section>
+      <h2>OCPP and charging</h2>
+      <div class="nums">
+        <div><span class="kicker">Messages/s</span><b id="ocpp-rate">—</b></div>
+        <div><span class="kicker">Voltage</span><b id="volt">—</b></div>
+        <div><span class="kicker">Current</span><b id="amp">—</b></div>
+        <div><span class="kicker">Power</span><b id="power">—</b></div>
+      </div>
+      <div class="row"><span>Energy</span><b id="kwh">—</b></div>
+      <div id="ocpp"></div>
+      <canvas id="power-chart" width="480" height="120"></canvas>
+    </section>
+    <section>
+      <h2>Host behavior</h2>
+      <div class="row"><span>Beacon</span><b id="beacon">No</b></div>
+      <table id="procs"></table>
+      <table id="outbound"></table>
+      <div id="files"></div>
+    </section>
+    <section>
+      <h2>Attack summary</h2>
+      <div class="nums">
+        <div><span class="kicker">Flows</span><b id="flows">0</b></div>
+        <div><span class="kicker">Attacks</span><b id="attacks">0</b></div>
+        <div><span class="kicker">False alarms</span><b id="fp">0</b></div>
+        <div><span class="kicker">Recall</span><b id="recall">—</b></div>
+      </div>
+      <canvas id="donut" width="200" height="140"></canvas>
+      <p class="muted">Live scenario vs model. Published Pipeline C test accuracy <b id="acc"></b>, F1 <b id="f1"></b>, ROC-AUC <b id="auc"></b>.</p>
+      <div class="cm" id="cm"></div>
+    </section>
+  </div>
+</main>
+<script>
+const CLASSES = ["Benign", "DoS", "RomCom", "Cryptojacking"];
+const COLOR = { Benign: "#3ecf8e", DoS: "#ff5d5d", RomCom: "#ffb020", Cryptojacking: "#79b8ff", cpu: "#dff25a", temp: "#ff5d5d", pps: "#79b8ff", bps: "#ffb020", power: "#3ecf8e" };
+let filter = "All";
+let lastBanner = "";
+let audioCtx = null;
+
+function pct(v) { return v == null ? "—" : (v * 100).toFixed(1) + "%"; }
+function num(v, d) { return v == null || Number.isNaN(v) ? "—" : Number(v).toFixed(d == null ? 0 : d); }
+function bps(v) {
+  if (v == null) return "—";
+  if (v >= 1e6) return (v / 1e6).toFixed(2) + " MB/s";
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + " kB/s";
+  return Math.round(v) + " B/s";
+}
+function uptime(s) {
+  s = s || 0;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? h + "h " + m + "m" : m ? m + "m " + sec + "s" : sec + "s";
+}
+async function control(cmd, value) {
+  await fetch("/api/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cmd, value }) });
+}
+function beep() {
+  if (!document.getElementById("sound").checked) return;
+  audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.frequency.value = 880;
+  o.connect(g); g.connect(audioCtx.destination);
+  g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+  o.start(); o.stop(audioCtx.currentTime + 0.25);
+}
+function lineChart(id, series) {
+  const canvas = document.getElementById(id);
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const keys = Object.keys(series);
+  let max = 1;
+  keys.forEach(k => series[k].forEach(v => { if (v > max) max = v; }));
+  ctx.strokeStyle = "#24302a";
+  ctx.beginPath(); ctx.moveTo(0, h - 1); ctx.lineTo(w, h - 1); ctx.stroke();
+  keys.forEach(k => {
+    const vals = series[k];
+    if (!vals.length) return;
+    ctx.strokeStyle = COLOR[k] || "#fff";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    vals.forEach((v, i) => {
+      const x = vals.length === 1 ? w - 2 : (i / (vals.length - 1)) * (w - 4) + 2;
+      const y = h - 4 - (v / max) * (h - 10);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  });
+}
+function donut(counts) {
+  const canvas = document.getElementById("donut");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const vals = CLASSES.map(c => counts[c] || 0);
+  const total = vals.reduce((a, b) => a + b, 0) || 1;
+  let angle = -Math.PI / 2;
+  vals.forEach((v, i) => {
+    const sweep = (v / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(70, 70);
+    ctx.arc(70, 70, 52, angle, angle + sweep);
+    ctx.closePath();
+    ctx.fillStyle = COLOR[CLASSES[i]];
+    ctx.fill();
+    angle += sweep;
+  });
+  ctx.beginPath(); ctx.arc(70, 70, 30, 0, Math.PI * 2); ctx.fillStyle = "#18201c"; ctx.fill();
+  ctx.fillStyle = "#e8f2ec"; ctx.font = "13px Segoe UI"; ctx.fillText("classes", 168, 28);
+  CLASSES.forEach((c, i) => { ctx.fillStyle = COLOR[c]; ctx.fillText(c + " " + (counts[c] || 0), 150, 50 + i * 18); });
+}
+function render(s) {
+  const badge = document.getElementById("badge");
+  badge.className = "badge " + (s.badge_kind || "idle");
+  const label = s.badge === "Benign" || s.badge === "Standby" ? s.badge : "Attack · " + s.badge;
+  document.getElementById("badge-text").textContent = label;
+  const conf = s.confidence == null ? "waiting" : (s.confidence * 100).toFixed(1) + "% · model " + s.model_label;
+  document.getElementById("badge-sub").textContent = conf;
+  document.getElementById("evse").textContent = s.evse_state || "Idle";
+  document.getElementById("uptime").textContent = uptime(s.uptime_s);
+  document.getElementById("model").textContent = s.model_name || "Pipeline C";
+  document.getElementById("version").textContent = s.model_version || "";
+  document.getElementById("latency").textContent = s.latency_ms == null ? "—" : s.latency_ms.toFixed(2) + " ms";
+  document.getElementById("action").textContent = s.action || "none";
+  document.getElementById("pred-name").textContent = s.badge || "—";
+  document.getElementById("pred-conf").textContent = s.confidence == null ? "—" : (s.confidence * 100).toFixed(1) + "%";
+  document.getElementById("bars").innerHTML = CLASSES.map(c => {
+    const p = (s.probs && s.probs[c]) || 0;
+    const col = c === "Benign" ? "okc" : c === "DoS" ? "dosc" : c === "RomCom" ? "romc" : "cryc";
+    return "<div class='row'><span>" + c + "</span><span>" + (p * 100).toFixed(1) + "%</span></div><div class='bar'><i class='" + col + "' style='width:" + (p * 100) + "%'></i></div>";
+  }).join("");
+  const banner = document.getElementById("banner");
+  if (s.banner) {
+    banner.textContent = s.advice || s.banner;
+    banner.className = "banner show";
+    if (s.banner !== lastBanner) beep();
+  } else banner.className = "banner";
+  lastBanner = s.banner || "";
+  document.getElementById("cpu").textContent = num(s.cpu, 0) + "%";
+  document.getElementById("temp").textContent = num(s.temp_c, 1) + " °C";
+  document.getElementById("ram").textContent = num(s.ram, 0) + "%";
+  document.getElementById("clock").textContent = num(s.clock_ghz, 2) + " GHz";
+  document.getElementById("throttle").textContent = s.throttle ? "Yes" : "No";
+  document.getElementById("cores").innerHTML = (s.cores || []).map((v, i) =>
+    "<div class='row'><span>Core " + i + "</span><span>" + v + "%</span></div><div class='bar'><i class='okc' style='width:" + v + "%'></i></div>"
+  ).join("");
+  document.getElementById("pps").textContent = num(s.pps, 0);
+  document.getElementById("bps").textContent = bps(s.bps);
+  document.getElementById("conns").textContent = s.conns == null ? "—" : s.conns;
+  document.getElementById("syn").textContent = s.syn == null ? "—" : s.syn;
+  document.getElementById("talkers").innerHTML = "<tr><th>Top talker</th><th>pkt/s</th></tr>" +
+    (s.talkers || []).map(t => "<tr><td>" + t.ip + "</td><td>" + t.pps + "</td></tr>").join("");
+  const rows = (s.log || []).filter(r => filter === "All" || r.cls === filter);
+  document.getElementById("log").innerHTML = rows.map(r =>
+    "<tr class='" + r.cls + "'><td>" + r.ts + "</td><td>" + r.cls + "</td><td>" + (r.conf * 100).toFixed(1) + "%</td><td>" + r.src + "</td><td>" + r.action + "</td></tr>"
+  ).join("");
+  document.getElementById("ocpp-rate").textContent = s.ocpp_rate == null ? "—" : s.ocpp_rate;
+  document.getElementById("volt").textContent = num(s.voltage, 1) + " V";
+  document.getElementById("amp").textContent = num(s.current, 2) + " A";
+  document.getElementById("power").textContent = num(s.power_kw, 2) + " kW";
+  document.getElementById("kwh").textContent = num(s.energy_kwh, 3) + " kWh";
+  const omax = Math.max(1, ...Object.values(s.ocpp || { x: 1 }));
+  document.getElementById("ocpp").innerHTML = Object.keys(s.ocpp || {}).map(k =>
+    "<div class='row'><span>" + k + "</span><span>" + s.ocpp[k] + "</span></div><div class='bar'><i class='cryc' style='width:" + (s.ocpp[k] / omax * 100) + "%'></i></div>"
+  ).join("");
+  document.getElementById("beacon").textContent = s.beacon ? "Yes · every " + s.beacon_s + "s" : "No";
+  document.getElementById("procs").innerHTML = "<tr><th>Process</th><th>CPU</th></tr>" +
+    (s.processes || []).map(p => "<tr><td>" + p.name + (p.flag ? " <span class='pill warn'>" + p.flag + "</span>" : "") + "</td><td>" + p.cpu + "%</td></tr>").join("");
+  document.getElementById("outbound").innerHTML = "<tr><th>Outbound</th><th></th></tr>" +
+    (s.outbound || []).map(o => "<tr><td>" + o.dst + ":" + o.port + "</td><td>" + o.note + "</td></tr>").join("");
+  document.getElementById("files").innerHTML = (s.file_alerts || []).map(f => "<div class='pill warn'>" + f + "</div>").join(" ");
+  document.getElementById("flows").textContent = s.flows || 0;
+  document.getElementById("attacks").textContent = s.attacks || 0;
+  document.getElementById("fp").textContent = s.false_alarms || 0;
+  document.getElementById("recall").textContent = s.recall == null ? "—" : pct(s.recall);
+  document.getElementById("acc").textContent = s.test_accuracy == null ? "—" : pct(s.test_accuracy);
+  document.getElementById("f1").textContent = s.test_f1 == null ? "—" : pct(s.test_f1);
+  document.getElementById("auc").textContent = s.test_auc == null ? "—" : pct(s.test_auc);
+  document.getElementById("cm").innerHTML =
+    "<span></span><span class='kicker'>pred benign</span><span class='kicker'>pred attack</span>" +
+    "<span class='kicker'>scenario benign</span><b>" + (s.tn || 0) + "</b><b>" + (s.fp || 0) + "</b>" +
+    "<span class='kicker'>scenario attack</span><b>" + (s.fn || 0) + "</b><b>" + (s.tp || 0) + "</b>";
+  const h = s.history || {};
+  lineChart("prob-chart", { Benign: h.Benign || [], DoS: h.DoS || [], RomCom: h.RomCom || [], Cryptojacking: h.Cryptojacking || [] });
+  lineChart("host-chart", { cpu: h.cpu || [], temp: h.temp || [] });
+  lineChart("net-chart", { pps: h.pps || [], bps: (h.bps || []).map(v => v / 1000) });
+  lineChart("power-chart", { power: h.power || [] });
+  donut(s.counts || {});
+  document.querySelectorAll("[data-scenario]").forEach(btn => btn.classList.toggle("on", btn.dataset.scenario === s.scenario && s.running));
+  document.querySelectorAll("[data-mit]").forEach(btn => btn.classList.toggle("on", btn.dataset.mit === s.mitigation));
+}
+document.getElementById("filters").innerHTML = ["All"].concat(CLASSES).map(c =>
+  "<button data-filter='" + c + "' class='" + (c === "All" ? "on" : "") + "'>" + c + "</button>"
+).join("");
+document.getElementById("filters").onclick = (ev) => {
+  const btn = ev.target.closest("button");
+  if (!btn) return;
+  filter = btn.dataset.filter;
+  document.querySelectorAll("#filters button").forEach(b => b.classList.toggle("on", b === btn));
+};
+document.getElementById("btn-start").onclick = () => control("start");
+document.getElementById("btn-stop").onclick = () => control("stop");
+document.querySelectorAll("[data-scenario]").forEach(btn => btn.onclick = () => control("scenario", btn.dataset.scenario));
+document.querySelectorAll("[data-mit]").forEach(btn => btn.onclick = () => control("mitigation", btn.dataset.mit));
+document.getElementById("btn-npy").onclick = () => control("npy", document.getElementById("npy").value);
+async function poll() {
+  try { render(await (await fetch("/api/state")).json()); } catch (err) { /* server still coming up */ }
+}
+setInterval(poll, 500);
+poll();
+</script>
+</body>
+</html>

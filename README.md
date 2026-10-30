@@ -16,7 +16,8 @@
 | 08 | `08_figures/` | All generated figures |
 | 09 | `09_processed_datasets/` | Cleaned/processed datasets & sequences |
 | 10 | `10_raw_data/` | Host + power raw data; network samples + download notes |
-| 11 | `11_jetson_nano_demo/` | Jetson Nano setup TODO + live demo GUI (Pipeline C) |
+| 11 | `11_jetson_nano_demo/` | Jetson Nano setup TODO + Pipeline C inference and desktop GUI |
+| 12 | `12_evse_live_dashboard/` | Browser dashboard: Benign / DoS / RomCom / Cryptojacking replay on Pipeline C |
 
 ## Pipelines
 - **A** LSTM (no DR)
@@ -35,6 +36,7 @@ Modalities: Host HPC/Kernel, Network EVSE-A, Power EVSE-B.
 5. Plot/export with `05_evaluation_plotting/`.
 6. Deploy with `06_edge_deployment/`.
 7. Demonstrate on Jetson with `11_jetson_nano_demo/` (`python jetson_demo_gui.py`).
+8. Open the scenario dashboard with `12_evse_live_dashboard/` (`python evse_dashboard.py`).
 
 ## Note on large files
 Files larger than ~95MB (especially full cleaned network CSV and large network attack CSVs) are omitted due to GitHub limits. Regenerate them with the preprocessing scripts after downloading the official dataset.

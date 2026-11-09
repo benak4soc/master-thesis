@@ -1,0 +1,1271 @@
+From f07b49ffc65a6723562e241e72a832b97cfb3234 Mon Sep 17 00:00:00 2001
+From: Can <noreply@example.com>
+Date: Sun, 8 Nov 2026 20:02:21 +0100
+Subject: [PATCH] Add robustness fixes: leakage audit, baselines,
+ generalisation tests, multi-seed, edge benchmark; fix tcp-flood label and
+ network leaky columns
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01AfBnNFT6XriyjPRJZnFN2k
+---
+ 02_preprocessing/hosteventspreprocessing.py   |  23 +-
+ .../prepare_network_sequences.py              |  18 +
+ FIX_GUIDE.md                                  | 322 ++++++++++++++++++
+ fixes/01_leakage_audit.py                     |  60 ++++
+ fixes/02_network_drop_leaky.py                |  59 ++++
+ fixes/03_classical_baselines.py               |  81 +++++
+ fixes/04_generalisation_tests.py              | 122 +++++++
+ fixes/05_multiseed_pipelines.py               |  94 +++++
+ fixes/06_edge_benchmark.py                    | 122 +++++++
+ fixes/fx_common.py                            | 234 +++++++++++++
+ requirements.txt                              |  13 +
+ 11 files changed, 1138 insertions(+), 10 deletions(-)
+ create mode 100644 FIX_GUIDE.md
+ create mode 100644 fixes/01_leakage_audit.py
+ create mode 100644 fixes/02_network_drop_leaky.py
+ create mode 100644 fixes/03_classical_baselines.py
+ create mode 100644 fixes/04_generalisation_tests.py
+ create mode 100644 fixes/05_multiseed_pipelines.py
+ create mode 100644 fixes/06_edge_benchmark.py
+ create mode 100644 fixes/fx_common.py
+ create mode 100644 requirements.txt
+
+diff --git a/02_preprocessing/hosteventspreprocessing.py b/02_preprocessing/hosteventspreprocessing.py
+index 5c2ed8f..4d0ee1e 100644
+--- a/02_preprocessing/hosteventspreprocessing.py
++++ b/02_preprocessing/hosteventspreprocessing.py
+@@ -272,27 +272,30 @@ print(
+ 
+ def map_attack_group(row):
+     """
+-    Prefer Scenario when it already encodes the thesis families.
+-    Fall back to Attack name mapping.
++    Prefer the specific Attack name (it is unambiguous: tcp-flood is always DoS).
++    Fall back to Scenario only when the Attack name is unknown.
++
++    FIX: the raw CICEVSE2024 host file labels the idle tcp-flood run with
++    Scenario="Recon". Scenario-first mapping turned that DoS run into Recon.
+     """
+ 
+-    scenario_key = (
+-        str(row["Scenario"])
++    attack_key = (
++        str(row["Attack"])
+         .strip()
+         .lower()
+     )
+ 
+-    if scenario_key in SCENARIO_TO_GROUP:
+-        return SCENARIO_TO_GROUP[scenario_key]
++    if attack_key in ATTACK_TO_GROUP:
++        return ATTACK_TO_GROUP[attack_key]
+ 
+-    attack_key = (
+-        str(row["Attack"])
++    scenario_key = (
++        str(row["Scenario"])
+         .strip()
+         .lower()
+     )
+ 
+-    if attack_key in ATTACK_TO_GROUP:
+-        return ATTACK_TO_GROUP[attack_key]
++    if scenario_key in SCENARIO_TO_GROUP:
++        return SCENARIO_TO_GROUP[scenario_key]
+ 
+     # Last resort: if labeled attack but unknown type
+     if str(row["Label"]).lower() == "attack":
+diff --git a/03_sequence_preparation/prepare_network_sequences.py b/03_sequence_preparation/prepare_network_sequences.py
+index 4715c04..de01988 100644
+--- a/03_sequence_preparation/prepare_network_sequences.py
++++ b/03_sequence_preparation/prepare_network_sequences.py
+@@ -55,7 +55,25 @@ METADATA = [
+     "target",
+     "target_multiclass",
+     "source_file",
++    # FIX: capture-specific columns. Absolute timestamps identify the source
++    # pcap/CSV (a single threshold on dst2src_first_seen_ms gave 100% test
++    # accuracy), ephemeral ports and nDPI meta are not attack behaviour.
++    "bidirectional_first_seen_ms",
++    "bidirectional_last_seen_ms",
++    "src2dst_first_seen_ms",
++    "src2dst_last_seen_ms",
++    "dst2src_first_seen_ms",
++    "dst2src_last_seen_ms",
++    "src_port",
++    "dst_port",
++    "vlan_id",
++    "tunnel_id",
++    "ip_version",
++    "application_is_guessed",
++    "application_confidence",
+ ]
++# NOTE: the timestamps above are still used for SORTING (see sort_values below);
++# they are only excluded from the model input.
+ 
+ ATTACK_TO_GROUP = {
+     "benign": "Benign",
+diff --git a/FIX_GUIDE.md b/FIX_GUIDE.md
+new file mode 100644
+index 0000000..8708a58
+--- /dev/null
++++ b/FIX_GUIDE.md
+@@ -0,0 +1,322 @@
++# Robustness Fix Guide — EVSE Attack Detection Thesis
++
++This guide closes the evaluation gaps in the current repo. Every fix comes with
++a script in `fixes/`, the exact command to run it, the result it gave on the data
++already in the repo, and what to write in the thesis.
++
++> All scripts run from the **repo root**, read `09_processed_datasets/`, and
++> write only to `fixes_out/`. Nothing original is overwritten.
++>
++> ```bash
++> pip install -r requirements.txt
++> python fixes/01_leakage_audit.py
++> ```
++
++| # | Gap | Severity | Script / change | Time |
++|---|-----|----------|-----------------|------|
++| 1 | Network timestamps leak the label | 🔴 critical | `fixes/02_network_drop_leaky.py` + patch in `prepare_network_sequences.py` | 1 h |
++| 2 | Network test has only 7 benign windows | 🔴 critical | §2 (re-split, report FPR CI) | 2–4 h |
++| 3 | No classical baselines | 🔴 critical | `fixes/03_classical_baselines.py` | 30 min |
++| 4 | Single-session benign → test = same recording | 🔴 critical | `fixes/04_generalisation_tests.py` | 30 min |
++| 5 | One seed only | 🟠 major | `fixes/05_multiseed_pipelines.py` | 1–3 h (CPU) |
++| 6 | No per-family results | 🟠 major | built into scripts 03/04/05 | – |
++| 7 | Stride-1 window overlap | 🟠 major | `--non-overlap` in 05, part (c) of 04 | – |
++| 8 | `tcp-flood` labelled Recon | 🟡 minor | patch in `hosteventspreprocessing.py` | 10 min |
++| 9 | LDA on power does not reduce (4→4) | 🟡 wording | thesis text only | – |
++| 10 | No on-device numbers | 🟠 major | `fixes/06_edge_benchmark.py` on Jetson + RPi4 | 2 h |
++| 11 | Reproducibility (paths, deps, raw data) | 🟡 minor | `requirements.txt`, §11 | 1 h |
++
++---
++
++## 1. Network: remove leaky columns
++
++**Problem.** A decision stump on `dst2src_first_seen_ms` alone gets 100% test
++accuracy (14 single features reach 100%). Absolute timestamps tell the model
++which capture file a flow came from, and each file is one label.
++
++**Fix (already applied on branch `robustness-fixes`).** Add the columns to
++`METADATA` in `03_sequence_preparation/prepare_network_sequences.py`. They stay
++in the dataframe for sorting but no longer go into the model:
++
++```python
++METADATA = [ ...,
++    "bidirectional_first_seen_ms", "bidirectional_last_seen_ms",
++    "src2dst_first_seen_ms", "src2dst_last_seen_ms",
++    "dst2src_first_seen_ms", "dst2src_last_seen_ms",
++    "src_port", "dst_port", "vlan_id", "tunnel_id", "ip_version",
++    "application_is_guessed", "application_confidence",
++]
++```
++
++Then rerun `prepare_network_sequences.py` → `prepare_network_dr_sequences.py`
++→ `train_network_pipelines_A_to_E.py`.
++
++**Quick path without raw data.** `python fixes/02_network_drop_leaky.py` drops
++the columns from the existing windows (identical result, since StandardScaler
++works per column) and re-fits PCA/LDA → `fixes_out/network_noleak/`.
++
++**Result.** 71 → 58 features; PCA 14 comps, LDA 2 comps. Scores are **still
++~100%**, but the remaining 1.0 features are now behavioural (`dst2src_packets`,
++`*_ack_packets`, packet-size stats: floods and scans get no or abnormal replies).
++That is a legitimate signal. Only the timestamp version was invalid.
++
++**Thesis text.**
++> "Absolute flow timestamps and port/tunnel identifiers were excluded from the
++> model input because a leakage audit (single-feature decision stumps) showed
++> that they identify the capture file and thus the label. After exclusion, the
++> strongest single features are reply-direction packet counts, which reflect
++> attack behaviour."
++
++Always include the audit (`fixes_out/leakage_audit_*.csv`) as an appendix table.
++It is the evidence a reviewer looks for.
++
++---
++
++## 2. Network: too few benign windows
++
++**Problem.** Test = 7 benign vs 924 attack, all 7 from `EVSE-A-idle-benign.csv`.
++Benign *charging* (5 windows) appears only in train. A FPR of 0/7 has a 95% CI
++of **[0%, 35%]** (Wilson). No claim about false alarms is possible.
++
++**Fixes, best first:**
++
++1. **Flow-level evaluation (window = 1).** Network flows are already aggregated
++   records, so windows of 5 consecutive flows add little. Use `WINDOW_SIZE = 1`
++   in `prepare_network_sequences.py`. That gives ~5× more benign samples.
++2. **Chronological split of EACH benign file separately**, so both idle and
++   charging benign show up in val and test. In the "rare group" branch of the
++   split, the code already splits per session; with window 1 every session has
++   enough rows.
++3. **Leave-one-file-out (GroupKFold over `source_file`)** for attack files, with
++   benign flows split by time. Report mean ± std over folds.
++4. **Lower `MAX_ATTACK_PER_GROUP`** (e.g. 4000 → 500) so the class ratio is not
++   130:1. Report balanced accuracy.
++5. **Always report FPR with a 95% CI and the benign count.**
++   `fx_common.binary_report()` does this (`fpr_ci95_low/high`, `n_benign_test`).
++
++If benign stays this small, present network as a **supplementary** modality
++and say so: "the EVSE-A benign capture contains only N flows, so network FPR
++cannot be estimated reliably."
++
++---
++
++## 3. Classical baselines
++
++`python fixes/03_classical_baselines.py` → `fixes_out/classical_baselines.csv`
++
++Models: LDA used as the classifier, Logistic Regression, Random Forest,
++HistGradientBoosting. Feature spaces: raw / PCA / LDA, all fitted on train only.
++
++**Results (test set, same windows as A–E):**
++
++| Modality | Best classical | F1 | FPR [95% CI] | Best deep (current repo) | F1 |
++|---|---|---|---|---|---|
++| Host | LogReg (raw 220) | **1.000** | 0.000 [0, 0.012] | all A–E | 1.000 |
++| Host | LDA-clf on LDA(3) | **1.000** | 0.000 | C LDA-LSTM | 1.000 |
++| Power | **HGB (raw 4)** | **0.996** | **0.021** [0.014, 0.033] | A LSTM | 0.990 (FPR 0.045) |
++| Network (no leak) | LogReg / RF | 1.000 | 0.000 [0, **0.354**] | – | – |
++
++**What this means.**
++- On host, *any* model is perfect, so the deep models don't win on accuracy.
++- On power, gradient boosting **beats every deep pipeline** and halves the FPR.
++
++**How to frame it (this makes the thesis stronger):**
++> "Detection quality saturates for linear and non-linear models alike on the
++> host modality; the contribution of LDA is therefore efficiency: 220 → 3 input
++> features and a 1.4k-parameter LSTM with no loss in F1. On the low-dimensional
++> power modality, tree ensembles outperform the temporal models, indicating that
++> temporal modelling is not the limiting factor there."
++
++Add the classical rows to **every** results table, next to A–E.
++
++---
++
++## 4. Generalisation tests (the most important new chapter)
++
++`python fixes/04_generalisation_tests.py` → `fixes_out/generalisation_tests.csv`
++
++Three tests, each re-fitting LDA on its own training set:
++
++### (a) Cross-condition: train on idle → test on charging (and reverse)
++
++| Host | F1 | FPR | Recon | DoS | Crypto |
++|---|---|---|---|---|---|
++| LDA-LSTM idle→charging | **0.64** | 0.00 | 0.92 | 0.98 | **0.00** |
++| LDA-LSTM charging→idle | **0.65** | 0.00 | **0.02** | **0.01** | 0.99 |
++| HGB idle→charging | 0.80 | **1.00** | 1.0 | 1.0 | 1.0 |
++
++| Power | F1 | FPR |
++|---|---|---|
++| all models idle→charging | 0.85 | **~1.00** (charging current looks like an attack) |
++| all models charging→idle | 0.41 | 0.00 (Recon 0%, Backdoor ~2%) |
++
++→ **The 100% does not carry over to an unseen operating state.** The models learn
++"what this state looks like", not just the attack. This is the main honest
++finding, and a real contribution: *train on both states, or normalise per state*.
++
++**Follow-up worth doing:** per-state normalisation (fit one scaler per `State`,
++or add `State` as an input feature) and rerun test (a).
++
++### (b) Leave-one-family-out (closest to zero-day)
++
++| Unseen family | Host LDA-LSTM | Host HGB | Power LDA-LSTM | Power HGB |
++|---|---|---|---|---|
++| Recon | 0.65 | 0.82 | 0.96 | 1.00 |
++| DoS | 0.36 | 0.96 | 0.99 | 1.00 |
++| Cryptojacking | **1.00** | 0.90 | 1.00 | 1.00 |
++| Backdoor | – | – | **0.12** | 0.34 |
++
++(values = recall on the never-seen family; benign FPR stays ≤ 7%)
++
++→ Cryptojacking on host and most power attacks are detected without being trained
++on. DoS (host) and Backdoor (power) are not. Report this table as is.
++
++### (c) Non-overlapping windows (stride = window)
++
++| | Host F1 / FPR | Power F1 / FPR |
++|---|---|---|
++| LDA-LSTM | 1.000 / 0.000 | **0.939 / 0.244** |
++| HGB | 1.000 / 0.000 | 0.989 / 0.067 |
++
++→ Host is unaffected (overlap is not why host is 100%). On power, LSTM FPR rises
++from ~9% to 24% with 10× fewer and independent windows. Stride-1 overlap was
++inflating the power results.
++
++---
++
++## 5. Multiple seeds
++
++```bash
++python fixes/05_multiseed_pipelines.py --modality host
++python fixes/05_multiseed_pipelines.py --modality power          # ~40 min CPU, GPU faster
++python fixes/05_multiseed_pipelines.py --modality power --non-overlap
++python fixes/05_multiseed_pipelines.py --modality network_noleak
++```
++
++Outputs `*_runs.csv` and `*_summary.csv` (mean ± std, per-family recall, FPR,
++train time, latency, Wilcoxon p-value vs Pipeline C).
++
++**Host result (5 seeds):** every pipeline F1 = 1.0000 ± 0.0000, so the
++saturation is stable, not luck. Train time per run: C 1.43 ± 0.09 s vs E 4.92 ± 0.43 s.
++
++**Power (to run):** the current single-seed gap C 0.983 vs E 0.990 must be
++shown with ± std. If the Wilcoxon p > 0.05, write "no significant difference".
++
++Table format for the thesis:
++
++| Pipeline | Feat. | Params | F1 (mean ± std) | FPR (mean ± std) | Train s |
++|---|---|---|---|---|---|
++
++---
++
++## 6. Per-family results
++
++All three scripts already output `recall_Recon`, `recall_DoS`,
++`recall_Cryptojacking`, `recall_Backdoor`, and `tnr_Benign`. Add one table per
++modality. Binary F1 alone hides that, e.g., Backdoor is the weak family.
++
++---
++
++## 7. Window overlap
++
++Covered by 4(c) and `--non-overlap` in script 05. In the methodology, state:
++"Overlapping windows (stride 1) were used for training; robustness was verified
++with non-overlapping windows (stride = w)."
++
++---
++
++## 8. Label bug: idle `tcp-flood` labelled as Recon
++
++The raw host file has `Scenario = Recon` for the idle tcp-flood run.
++`map_attack_group()` used Scenario first, so this DoS run became Recon (it sits
++in the **val** split). **Fixed** in `02_preprocessing/hosteventspreprocessing.py`:
++the Attack name is now checked first, Scenario only as a fallback. Rerun host
++preprocessing → sequences → DR → training.
++
++---
++
++## 9. LDA on power is not a reduction
++
++4 raw features, 5 classes → LDA gives min(C−1, d) = 4 components: **4 → 4**.
++PCA keeps 1 component. Rewrite as:
++> "For the 4-dimensional power modality, LDA acts as a supervised linear
++> re-projection rather than a reduction (4 → 4); the dimensionality-reduction
++> argument applies to the host (220 → 3) and network (58 → 2) modalities."
++
++---
++
++## 10. On-device measurement (Jetson Nano + Raspberry Pi 4)
++
++Copy `11_jetson_nano_demo/pipeline_C_lda_lstm/`,
++`13_rpi4_algorithm_dashboard/host_lda_lstm/test_windows_raw.npz` and
++`fixes/06_edge_benchmark.py` to each device:
++
++```bash
++pip install numpy onnxruntime psutil
++# terminal 1 (Jetson power/thermal log)
++sudo nvpmodel -m 0 && sudo jetson_clocks
++sudo tegrastats --interval 500 --logfile tegrastats.log
++# terminal 2
++python 06_edge_benchmark.py --model-dir pipeline_C_lda_lstm \
++   --raw-windows test_windows_raw.npz --device-name "Jetson Nano 4GB MAXN"
++```
++
++RPi4: same command, with `--device-name "RPi4 4GB"`. Use a USB power meter for watts.
++
++The script measures the **end-to-end** path (raw 220 counters → scaler → LDA →
++ONNX LSTM), plus cold start, p50/p95/p99 latency, throughput at batch 1/32/256,
++RAM, CPU %, and checks accuracy on-device. Reference run on a cloud x86 CPU:
++median **0.028 ms**, p99 0.069 ms, ~32k windows/s, 7 KB model, accuracy 1.0.
++
++Edge results table:
++
++| Device | Latency p50 / p99 (ms) | Throughput (win/s) | RAM (MB) | Power (W) | Acc |
++|---|---|---|---|---|---|
++
++Also benchmark one classical model (LogReg on LDA features, ~16 parameters) on
++the same devices. If it is faster with the same accuracy, say so honestly. The
++LSTM can still be argued for because of temporal context (see 4(b), where
++LDA-LSTM detects unseen Cryptojacking 100% and LogReg 0%).
++
++---
++
++## 11. Reproducibility
++
++- `requirements.txt` added at repo root.
++- Training scripts use paths like `processed_EVSE_B_Host/...` and `models/...`.
++  Either run them from inside `09_processed_datasets/`, or (better) add a
++  `config.py` with `REPO = Path(__file__).resolve().parents[1]` and build all
++  paths from it.
++- `all_pipeline_results.csv` stores Windows paths (`models\...`). Store them
++  with `Path(...).as_posix()`.
++- `10_raw_data/` is referenced in the README but missing: add at least
++  `README_DATA.md` with the CICEVSE2024 download link, file names and checksums.
++- Write down the α, β, γ of the selection score (Phase G) and the cost
++  normalisation. Otherwise "multi-criteria selection" can't be reproduced.
++
++---
++
++## Suggested new thesis structure for results
++
++1. Main comparison A–E **+ classical baselines**, mean ± std over 5 seeds
++2. Per-family recall table
++3. Leakage audit (appendix)
++4. **Robustness:** cross-condition, leave-one-family-out, non-overlapping windows
++5. Edge benchmark on Jetson Nano and RPi4
++6. Discussion: accuracy saturates in-distribution; generalisation across
++   operating states is the open problem; LDA's value is efficiency
++
++## Run everything
++
++```bash
++pip install -r requirements.txt
++python fixes/01_leakage_audit.py
++python fixes/02_network_drop_leaky.py
++python fixes/01_leakage_audit.py --seq-dir fixes_out/network_noleak
++python fixes/03_classical_baselines.py
++python fixes/04_generalisation_tests.py
++for m in host power network_noleak; do python fixes/05_multiseed_pipelines.py --modality $m; done
++python fixes/05_multiseed_pipelines.py --modality power --non-overlap
++# on each edge device:
++python fixes/06_edge_benchmark.py --device-name "<device>"
++```
+diff --git a/fixes/01_leakage_audit.py b/fixes/01_leakage_audit.py
+new file mode 100644
+index 0000000..814f125
+--- /dev/null
++++ b/fixes/01_leakage_audit.py
+@@ -0,0 +1,60 @@
++"""
++FIX 1a — Leakage / shortcut audit.
++
++Idea: if ONE feature with ONE threshold (a decision stump) already gives
++~100% on the TEST set, the deep models are not learning attack behaviour,
++they are exploiting a shortcut (timestamp, port, capture-specific constant).
++
++Run:
++    python fixes/01_leakage_audit.py                     # all three modalities
++    python fixes/01_leakage_audit.py --seq-dir fixes_out/network_noleak
++Output:
++    fixes_out/leakage_audit_<name>.csv   (one row per feature, sorted)
++Rule of thumb for the thesis:
++    any single feature with test accuracy >= 0.99 must be justified or removed.
++"""
++
++import argparse
++import os
++
++import numpy as np
++from sklearn.metrics import accuracy_score, balanced_accuracy_score
++from sklearn.tree import DecisionTreeClassifier
++
++from fx_common import SEQ_DIRS, feature_names, load_all, save_rows
++
++
++def audit(name, seq_dir):
++    data = load_all(name if name in SEQ_DIRS else None, seq_dir)
++    feats = feature_names(None, seq_dir)
++    Xtr, ytr = data["train"][0][:, -1, :], data["train"][1]   # last timestep = label timestep
++    Xte, yte = data["test"][0][:, -1, :], data["test"][1]
++    rows = []
++    for j, f in enumerate(feats):
++        stump = DecisionTreeClassifier(max_depth=1, random_state=0).fit(Xtr[:, [j]], ytr)
++        p = stump.predict(Xte[:, [j]])
++        rows.append({"feature": f,
++                     "test_acc": accuracy_score(yte, p),
++                     "test_balanced_acc": balanced_accuracy_score(yte, p),
++                     "threshold_scaled": float(stump.tree_.threshold[0])})
++    rows.sort(key=lambda r: -r["test_balanced_acc"])
++    flagged = [r for r in rows if r["test_balanced_acc"] >= 0.99]
++    print(f"\n=== {name}  ({seq_dir})")
++    print(f"test: benign={int((yte == 0).sum())} attack={int((yte == 1).sum())}")
++    print("Top 8 single-feature stumps (balanced acc):")
++    for r in rows[:8]:
++        print(f"  {r['test_balanced_acc']:.3f}  {r['feature']}")
++    print(f"FLAGGED (>=0.99 alone): {len(flagged)} -> {[r['feature'] for r in flagged]}")
++    save_rows(rows, f"leakage_audit_{name}.csv")
++    return flagged
++
++
++if __name__ == "__main__":
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--seq-dir", help="audit a custom sequence folder")
++    a = ap.parse_args()
++    if a.seq_dir:
++        audit(os.path.basename(os.path.normpath(a.seq_dir)), a.seq_dir)
++    else:
++        for m, d in SEQ_DIRS.items():
++            audit(m, d)
+diff --git a/fixes/02_network_drop_leaky.py b/fixes/02_network_drop_leaky.py
+new file mode 100644
+index 0000000..086f209
+--- /dev/null
++++ b/fixes/02_network_drop_leaky.py
+@@ -0,0 +1,59 @@
++"""
++FIX 1b — Remove leaky network features and rebuild the network windows (+PCA/LDA).
++
++Quick path (works with what is in the repo): drop the columns from the
++existing windows. StandardScaler is per-column, so dropping columns after
++scaling is mathematically identical to re-scaling without them.
++
++Proper path (for the final thesis): also add the same list to METADATA in
++03_sequence_preparation/prepare_network_sequences.py so the columns never
++enter feature_columns (see FIX_GUIDE.md, section 1).
++
++Run:
++    python fixes/02_network_drop_leaky.py
++Output:
++    fixes_out/network_noleak/{train,val,test}_windows.npz + meta + feature_columns.txt
++    fixes_out/network_noleak/{pca,lda_multiclass}/...
++"""
++
++import json
++import os
++import shutil
++
++import numpy as np
++
++from fx_common import NETWORK_LEAKY_COLUMNS, OUT, SEQ_DIRS, feature_names, fit_dr, load_all
++
++SRC = SEQ_DIRS["network"]
++DST = os.path.join(OUT, "network_noleak")
++os.makedirs(DST, exist_ok=True)
++
++feats = feature_names("network")
++keep = [i for i, f in enumerate(feats) if f not in NETWORK_LEAKY_COLUMNS]
++dropped = [f for f in feats if f in NETWORK_LEAKY_COLUMNS]
++print(f"Features {len(feats)} -> {len(keep)}; dropped: {dropped}")
++
++data = load_all("network")
++clean = {}
++for split, (X, yb, ym, meta) in data.items():
++    Xk = X[:, :, keep]
++    clean[split] = (Xk, yb, ym)
++    np.savez_compressed(os.path.join(DST, f"{split}_windows.npz"), X=Xk, y_binary=yb, y_multiclass=ym)
++    shutil.copy(os.path.join(SRC, f"{split}_meta.json"), os.path.join(DST, f"{split}_meta.json"))
++with open(os.path.join(DST, "feature_columns.txt"), "w", encoding="utf-8") as fh:
++    fh.write("\n".join(feats[i] for i in keep) + "\n")
++
++# Re-fit PCA and LDA on TRAIN only, on the cleaned features
++for kind, sub in (("pca", "pca"), ("lda", "lda_multiclass")):
++    tf, dim = fit_dr(kind, clean["train"][0], clean["train"][2])
++    d = os.path.join(DST, sub)
++    os.makedirs(d, exist_ok=True)
++    for split, (X, yb, ym) in clean.items():
++        np.savez_compressed(os.path.join(d, f"{split}_windows.npz"), X=tf(X), y_binary=yb, y_multiclass=ym)
++    with open(os.path.join(d, "feature_columns.txt"), "w") as fh:
++        fh.write("\n".join(f"{kind}_{i}" for i in range(dim)) + "\n")
++    print(f"{kind.upper()}: {len(keep)} -> {dim} components")
++
++with open(os.path.join(DST, "README.txt"), "w") as fh:
++    json.dump({"source": SRC, "dropped_columns": dropped, "n_features": len(keep)}, fh, indent=2)
++print(f"\nDone -> {DST}\nNext: python fixes/01_leakage_audit.py --seq-dir {DST}")
+diff --git a/fixes/03_classical_baselines.py b/fixes/03_classical_baselines.py
+new file mode 100644
+index 0000000..6044b27
+--- /dev/null
++++ b/fixes/03_classical_baselines.py
+@@ -0,0 +1,81 @@
++"""
++FIX 2 — Classical baselines next to pipelines A–E.
++
++A thesis that claims "LDA + LSTM" is a good detector must show what a
++simple model achieves on exactly the same windows. If LogReg already hits
++F1 = 1.0, the contribution is EFFICIENCY, not accuracy — say so.
++
++Models (all on flattened windows, same train/val/test):
++    LDA-clf    : LDA used directly as the classifier (no deep model at all)
++    LogReg     : L2 logistic regression
++    RF         : random forest, 200 trees
++    HGB        : histogram gradient boosting (XGBoost-like, in sklearn)
++Feature spaces: raw | PCA | LDA (PCA/LDA fit on train timesteps only)
++
++Run:
++    python fixes/03_classical_baselines.py
++Output:
++    fixes_out/classical_baselines.csv  (accuracy, F1, FPR + 95% CI, per-family recall,
++                                        #params, median/p95 latency per window)
++"""
++
++import os
++import pickle
++
++import numpy as np
++from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
++from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
++from sklearn.linear_model import LogisticRegression
++
++from fx_common import OUT, SEQ_DIRS, binary_report, fit_dr, latency_ms, load_all, save_rows
++
++MODALITIES = dict(SEQ_DIRS)
++noleak = os.path.join(OUT, "network_noleak")
++if os.path.isdir(noleak):
++    MODALITIES["network_noleak"] = noleak
++    MODALITIES.pop("network")   # the leaky version should not be reported any more
++
++
++def models():
++    return {
++        "LDA-clf": LinearDiscriminantAnalysis(),
++        "LogReg": LogisticRegression(max_iter=3000, class_weight="balanced"),
++        "RF": RandomForestClassifier(n_estimators=200, n_jobs=-1, random_state=0,
++                                     class_weight="balanced"),
++        "HGB": HistGradientBoostingClassifier(random_state=0, class_weight="balanced"),
++    }
++
++
++def size_proxy(m):
++    """#parameters for linear models, #nodes for trees, bytes as fallback."""
++    if hasattr(m, "coef_"):
++        return int(m.coef_.size + np.size(m.intercept_))
++    if hasattr(m, "estimators_"):
++        return int(sum(e.tree_.node_count for e in m.estimators_))
++    return len(pickle.dumps(m))
++
++
++rows = []
++for mod, seq_dir in MODALITIES.items():
++    d = load_all(None, seq_dir)
++    (Xtr, ytr, mtr, _), (Xte, yte, mte, _) = d["train"], d["test"]
++    for dr in ("none", "pca", "lda"):
++        tf, dim = fit_dr(dr, Xtr, mtr)
++        A, B = tf(Xtr).reshape(len(Xtr), -1), tf(Xte).reshape(len(Xte), -1)
++        for name, m in models().items():
++            m.fit(A, ytr)
++            pred = m.predict(B)
++            prob = m.predict_proba(B)[:, 1]
++            r = binary_report(yte, pred, prob, mte)
++            med, p95 = latency_ms(lambda x: m.predict(x), B[:1], reps=100)
++            r.update(modality=mod, dr=dr, features_per_step=dim, model=name,
++                     size=size_proxy(m), latency_ms_median=med, latency_ms_p95=p95)
++            rows.append(r)
++            print(f"{mod:15s} {dr:4s} dim={dim:3d} {name:8s} F1={r['f1']:.4f} "
++                  f"FPR={r['fpr']:.3f} [{r['fpr_ci95_low']:.3f},{r['fpr_ci95_high']:.3f}]")
++
++cols_first = ["modality", "dr", "features_per_step", "model", "accuracy", "f1", "roc_auc",
++              "fpr", "fpr_ci95_low", "fpr_ci95_high", "n_benign_test", "size",
++              "latency_ms_median", "latency_ms_p95"]
++rows = [{**{k: r.get(k) for k in cols_first}, **r} for r in rows]
++save_rows(rows, "classical_baselines.csv")
+diff --git a/fixes/04_generalisation_tests.py b/fixes/04_generalisation_tests.py
+new file mode 100644
+index 0000000..6bbaa94
+--- /dev/null
++++ b/fixes/04_generalisation_tests.py
+@@ -0,0 +1,122 @@
++"""
++FIX 3 — Stricter evaluations that a 100% score has to survive.
++
++(a) CROSS-CONDITION : train on State=idle  -> test on State=charging, and reverse.
++                      Benign/Cryptojacking are single sessions split by time, so the
++                      original test set is "the same recording, later". Here the test
++                      condition is never seen during training.
++(b) LEAVE-ONE-FAMILY-OUT (LOFO): remove one attack family (e.g. Cryptojacking) from
++                      training completely; measure how much of it is still flagged.
++                      This is the closest thing to a zero-day test the dataset allows.
++(c) NON-OVERLAPPING : keep only every W-th window (stride = window) so test windows
++                      share no timesteps -> removes the stride-1 inflation.
++
++Models: LDA-LSTM (your Pipeline C, hidden 16 = tuned edge model), LogReg, HGB.
++PCA/LDA are re-fitted on each new training set (no leakage from the held-out part).
++
++Run:
++    python fixes/04_generalisation_tests.py                 # host + power
++    python fixes/04_generalisation_tests.py --modality host --fast
++Output:
++    fixes_out/generalisation_tests.csv
++"""
++
++import argparse
++
++import numpy as np
++from sklearn.ensemble import HistGradientBoostingClassifier
++from sklearn.linear_model import LogisticRegression
++
++from fx_common import (FAMILY_NAMES, SEQ_DIRS, binary_report, fit_dr, load_all,
++                       non_overlapping, predict_torch, save_rows, subset, train_torch)
++
++
++def concat(*parts):
++    X = np.concatenate([p[0] for p in parts])
++    yb = np.concatenate([p[1] for p in parts])
++    ym = np.concatenate([p[2] for p in parts])
++    meta = sum((p[3] for p in parts), [])
++    return X, yb, ym, meta
++
++
++def run_models(tag, mod, train, val, test, fast=False):
++    out = []
++    if len(np.unique(train[1])) < 2 or len(test[1]) == 0:
++        print(f"  skip {tag}: train has one class or test empty")
++        return out
++    tf, dim = fit_dr("lda", train[0], train[2])
++    Xtr, Xva, Xte = tf(train[0]), tf(val[0]), tf(test[0])
++    # deep: Pipeline C (LDA-LSTM), tuned edge size
++    model = train_torch("lstm", Xtr, train[1], Xva, val[1], hidden_size=16,
++                        epochs=15 if fast else 40)
++    p, pr = predict_torch(model, Xte)
++    out.append(("LDA-LSTM(h16)", p, pr))
++    for name, clf in (("LogReg", LogisticRegression(max_iter=3000, class_weight="balanced")),
++                      ("HGB", HistGradientBoostingClassifier(random_state=0, class_weight="balanced"))):
++        A = train[0].reshape(len(train[0]), -1)
++        clf.fit(A, train[1])
++        B = test[0].reshape(len(test[0]), -1)
++        out.append((name + "(raw)", clf.predict(B), clf.predict_proba(B)[:, 1]))
++    rows = []
++    for name, p, pr in out:
++        r = binary_report(test[1], p, pr, test[2])
++        r.update(modality=mod, test=tag, model=name, n_train=len(train[1]), n_test=len(test[1]))
++        rows.append(r)
++        fam = {k: round(v, 3) for k, v in r.items() if k.startswith(("recall_", "tnr_"))}
++        print(f"  {tag:32s} {name:14s} F1={r['f1']:.3f} FPR={r['fpr']:.3f} {fam}")
++    return rows
++
++
++def main(modalities, fast):
++    rows = []
++    for mod in modalities:
++        d = load_all(mod)
++        tr, va, te = d["train"], d["val"], d["test"]
++        allw = concat(tr, va, te)
++        state = np.array([m.get("State", "na") for m in allw[3]])
++        print(f"\n######## {mod}")
++
++        # (a) cross-condition
++        for a, b in (("idle", "charging"), ("charging", "idle")):
++            if not ((state == a).any() and (state == b).any()):
++                continue
++            src = subset(allw, state == a)
++            # validation = random 15% of source windows, by session to stay honest
++            sess = np.array([m["session_id"] for m in src[3]])
++            rng = np.random.default_rng(0)
++            u = np.unique(sess)
++            val_s = set(rng.choice(u, size=max(1, int(0.15 * len(u))), replace=False))
++            is_val = np.array([s in val_s for s in sess])
++            # make sure val has both classes; otherwise fall back to the original val split
++            v = subset(src, is_val)
++            if len(np.unique(v[1])) < 2:
++                v = subset(va, np.array([m.get("State") == a for m in va[3]]))
++                is_val[:] = False
++            rows += run_models(f"cross: train {a} -> test {b}", mod,
++                               subset(src, ~is_val), v, subset(allw, state == b), fast)
++
++        # (b) leave-one-family-out
++        for fid in np.unique(allw[2]):
++            if fid == 0:
++                continue
++            fam = FAMILY_NAMES[int(fid)]
++            train = subset(tr, tr[2] != fid)
++            val = subset(va, va[2] != fid)
++            unseen = subset(allw, allw[2] == fid)            # every window of that family
++            benign_test = subset(te, te[2] == 0)
++            rows += run_models(f"LOFO: unseen {fam}", mod, train, val,
++                               concat(benign_test, unseen), fast)
++
++        # (c) non-overlapping windows
++        W = tr[0].shape[1]
++        rows += run_models(f"non-overlap (stride={W})", mod, non_overlapping(tr, W),
++                           non_overlapping(va, W), non_overlapping(te, W), fast)
++    save_rows(rows, "generalisation_tests.csv")
++
++
++if __name__ == "__main__":
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--modality", choices=list(SEQ_DIRS), action="append")
++    ap.add_argument("--fast", action="store_true", help="15 epochs instead of 40")
++    a = ap.parse_args()
++    main(a.modality or ["host", "power"], a.fast)
+diff --git a/fixes/05_multiseed_pipelines.py b/fixes/05_multiseed_pipelines.py
+new file mode 100644
+index 0000000..4f16111
+--- /dev/null
++++ b/fixes/05_multiseed_pipelines.py
+@@ -0,0 +1,94 @@
++"""
++FIX 4 — Pipelines A–E with 5 seeds -> mean ± std (and per-family recall, FPR CI).
++
++One seed (42) cannot tell whether C vs E on power (F1 0.983 vs 0.990) is a real
++difference or noise. This re-trains every pipeline with seeds 0..4 using the
++same recipe as lstm_common (weighted CE, Adam 1e-3, early stop on val F1, patience 8)
++and reports mean ± std plus a paired Wilcoxon test vs Pipeline C.
++
++Run:
++    python fixes/05_multiseed_pipelines.py --modality power
++    python fixes/05_multiseed_pipelines.py --modality host --non-overlap
++    python fixes/05_multiseed_pipelines.py --modality network_noleak --seeds 0 1 2
++Output:
++    fixes_out/multiseed_<modality>[_nonoverlap]_runs.csv     (one row per run)
++    fixes_out/multiseed_<modality>[_nonoverlap]_summary.csv  (mean ± std table for the thesis)
++"""
++
++import argparse
++import os
++import time
++
++import numpy as np
++import pandas as pd
++
++from fx_common import (OUT, SEQ_DIRS, binary_report, fit_dr, latency_ms, load_all, n_params,
++                       non_overlapping, predict_torch, save_rows, train_torch)
++
++PIPELINES = {          # letter: (DR, model_type)
++    "A_LSTM": ("none", "lstm"),
++    "B_PCA-LSTM": ("pca", "lstm"),
++    "C_LDA-LSTM": ("lda", "lstm"),
++    "D_LDA-BiLSTM": ("lda", "bilstm"),
++    "E_CNN-BiLSTM-Attn": ("none", "cnn_bilstm_attention"),
++}
++
++
++def main(mod, seeds, non_overlap, epochs):
++    seq_dir = os.path.join(OUT, "network_noleak") if mod == "network_noleak" else SEQ_DIRS[mod]
++    d = load_all(None, seq_dir)
++    tr, va, te = d["train"], d["val"], d["test"]
++    if non_overlap:
++        W = tr[0].shape[1]
++        tr, va, te = (non_overlapping(s, W) for s in (tr, va, te))
++    tag = mod + ("_nonoverlap" if non_overlap else "")
++    rows = []
++    for pname, (dr, mtype) in PIPELINES.items():
++        tf, dim = fit_dr(dr, tr[0], tr[2])          # DR is deterministic -> fit once
++        Xtr, Xva, Xte = tf(tr[0]), tf(va[0]), tf(te[0])
++        for s in seeds:
++            t0 = time.time()
++            model = train_torch(mtype, Xtr, tr[1], Xva, va[1], seed=s, epochs=epochs)
++            secs = time.time() - t0
++            p, pr = predict_torch(model, Xte)
++            r = binary_report(te[1], p, pr, te[2])
++            med, p95 = latency_ms(lambda x: predict_torch(model, x), Xte[:1], reps=100)
++            r.update(modality=tag, pipeline=pname, seed=s, features_per_step=dim,
++                     n_params=n_params(model), train_seconds=secs,
++                     latency_ms_median=med, latency_ms_p95=p95)
++            rows.append(r)
++            print(f"{tag} {pname:18s} seed={s} F1={r['f1']:.4f} FPR={r['fpr']:.4f} ({secs:.0f}s)")
++    save_rows(rows, f"multiseed_{tag}_runs.csv")
++
++    df = pd.DataFrame(rows)
++    metrics = [c for c in ("f1", "roc_auc", "fpr", "recall", "train_seconds", "latency_ms_median")
++               if c in df] + [c for c in df if c.startswith(("recall_", "tnr_"))]
++    summ = []
++    for pname, g in df.groupby("pipeline", sort=False):
++        row = {"pipeline": pname, "features_per_step": int(g.features_per_step.iloc[0]),
++               "n_params": int(g.n_params.iloc[0]), "n_seeds": len(g)}
++        for m in metrics:
++            row[m] = f"{g[m].mean():.4f} ± {g[m].std(ddof=1):.4f}"
++        # paired test against Pipeline C on F1 (same seeds)
++        if pname != "C_LDA-LSTM" and len(seeds) >= 5:
++            from scipy.stats import wilcoxon
++            c = df[df.pipeline == "C_LDA-LSTM"].sort_values("seed").f1.values
++            x = g.sort_values("seed").f1.values
++            try:
++                row["wilcoxon_p_vs_C"] = float(wilcoxon(x, c).pvalue)
++            except ValueError:          # all differences zero (saturated metrics)
++                row["wilcoxon_p_vs_C"] = 1.0
++        summ.append(row)
++    path = save_rows(summ, f"multiseed_{tag}_summary.csv")
++    print(pd.read_csv(path).to_string(index=False))
++
++
++if __name__ == "__main__":
++    ap = argparse.ArgumentParser()
++    ap.add_argument("--modality", default="power",
++                    choices=list(SEQ_DIRS) + ["network_noleak"])
++    ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1, 2, 3, 4])
++    ap.add_argument("--non-overlap", action="store_true")
++    ap.add_argument("--epochs", type=int, default=40)
++    a = ap.parse_args()
++    main(a.modality, a.seeds, a.non_overlap, a.epochs)
+diff --git a/fixes/06_edge_benchmark.py b/fixes/06_edge_benchmark.py
+new file mode 100644
+index 0000000..fa2884f
+--- /dev/null
++++ b/fixes/06_edge_benchmark.py
+@@ -0,0 +1,122 @@
++"""
++FIX 5 — On-device benchmark (run this ON the Jetson Nano and ON the Raspberry Pi 4).
++
++Measures the FULL inference path the thesis claims is edge-ready:
++    raw 220 host counters -> StandardScaler -> LDA (220->3) -> LSTM(h16) ONNX -> logits
++and reports what a reviewer will ask for:
++    model size, cold-start time, latency median/p95/p99 (batch 1),
++    throughput (windows/s) at batch 1/32/256, peak RSS memory, CPU %,
++    and a correctness check against test_windows_raw.npz.
++
++Power draw: run in parallel and attach the log
++    Jetson : sudo tegrastats --interval 500 --logfile tegrastats.log
++    RPi4   : USB power meter (e.g. UM25C) or `vcgencmd measure_volts/measure_temp`
++
++Usage (copy 11_jetson_nano_demo/pipeline_C_lda_lstm + this file + the raw test windows):
++    pip install numpy onnxruntime psutil
++    python 06_edge_benchmark.py --model-dir pipeline_C_lda_lstm \
++        --raw-windows test_windows_raw.npz --device-name "Jetson Nano 4GB (MAXN)"
++    # GPU on Jetson (if onnxruntime-gpu / TensorRT EP installed):
++    python 06_edge_benchmark.py ... --provider CUDAExecutionProvider
++Output:
++    edge_benchmark_<device>.json   -> put the numbers in the thesis table
++"""
++
++import argparse
++import json
++import os
++import platform
++import time
++
++import numpy as np
++
++ap = argparse.ArgumentParser()
++ap.add_argument("--model-dir", default="11_jetson_nano_demo/pipeline_C_lda_lstm")
++ap.add_argument("--raw-windows", default="13_rpi4_algorithm_dashboard/host_lda_lstm/test_windows_raw.npz",
++                help="npz with X (N,10,220) UNSCALED counters and y / y_binary")
++ap.add_argument("--device-name", default=platform.node())
++ap.add_argument("--provider", default="CPUExecutionProvider")
++ap.add_argument("--reps", type=int, default=2000)
++a = ap.parse_args()
++
++import onnxruntime as ort  # noqa: E402
++
++try:
++    import psutil
++    proc = psutil.Process()
++except ImportError:
++    psutil, proc = None, None
++
++onnx_path = os.path.join(a.model_dir, "lda_lstm.onnx")
++pre = np.load(os.path.join(a.model_dir, "preprocess_numpy.npz"))
++mean, scale = pre["scaler_mean"], pre["scaler_scale"]
++xbar, scal = pre["lda_xbar"], pre["lda_scalings"]
++
++
++def preprocess(X):                       # X: (B,10,220) raw counters
++    Z = (X - mean) / scale               # StandardScaler
++    return ((Z - xbar) @ scal).astype(np.float32)   # sklearn LDA(svd).transform
++
++
++rss0 = proc.memory_info().rss if proc else 0
++t0 = time.perf_counter()
++so = ort.SessionOptions()
++so.intra_op_num_threads = os.cpu_count()
++sess = ort.InferenceSession(onnx_path, so, providers=[a.provider])
++cold_ms = (time.perf_counter() - t0) * 1000
++inp = sess.get_inputs()[0].name
++
++raw = np.load(a.raw_windows)
++X = raw["X"].astype(np.float64)
++y = raw["y_binary"] if "y_binary" in raw else raw["y"]
++
++
++def infer(xb):
++    return sess.run(None, {inp: preprocess(xb)})[0]
++
++
++# correctness on the full test set
++pred = np.concatenate([infer(X[i:i + 256]).argmax(1) for i in range(0, len(X), 256)])
++acc = float((pred == y).mean())
++
++# latency, batch 1, end-to-end (preprocess + model)
++for _ in range(50):
++    infer(X[:1])
++if psutil:
++    proc.cpu_percent(None)
++lat = []
++for i in range(a.reps):
++    xb = X[i % len(X)][None]
++    s = time.perf_counter()
++    infer(xb)
++    lat.append((time.perf_counter() - s) * 1000)
++cpu = proc.cpu_percent(None) if psutil else None
++lat = np.array(lat)
++
++thr = {}
++for b in (1, 32, 256):
++    xb = np.resize(X, (b,) + X.shape[1:])
++    n, s = 0, time.perf_counter()
++    while time.perf_counter() - s < 3.0:
++        infer(xb)
++        n += b
++    thr[f"batch_{b}"] = n / (time.perf_counter() - s)
++
++res = {
++    "device": a.device_name, "machine": platform.machine(), "python": platform.python_version(),
++    "onnxruntime": ort.__version__, "provider": a.provider,
++    "onnx_size_kb": os.path.getsize(onnx_path) / 1024,
++    "cold_start_ms": cold_ms,
++    "latency_ms_e2e_batch1": {"median": float(np.median(lat)), "p95": float(np.percentile(lat, 95)),
++                              "p99": float(np.percentile(lat, 99)), "max": float(lat.max())},
++    "throughput_windows_per_s": thr,
++    "peak_rss_mb": (proc.memory_info().rss / 2**20) if proc else None,
++    "rss_increase_mb": ((proc.memory_info().rss - rss0) / 2**20) if proc else None,
++    "cpu_percent_during_latency_loop": cpu,
++    "test_accuracy_on_device": acc, "n_test_windows": int(len(y)),
++}
++out = f"edge_benchmark_{a.device_name.replace(' ', '_').replace('/', '-')}.json"
++with open(out, "w") as fh:
++    json.dump(res, fh, indent=2)
++print(json.dumps(res, indent=2))
++print(f"\nSaved {out}")
+diff --git a/fixes/fx_common.py b/fixes/fx_common.py
+new file mode 100644
+index 0000000..840da39
+--- /dev/null
++++ b/fixes/fx_common.py
+@@ -0,0 +1,234 @@
++"""
++Shared helpers for the robustness fixes (fixes/0*.py).
++
++All scripts are meant to be run from the REPO ROOT, e.g.
++    python fixes/03_classical_baselines.py
++
++They read the already-prepared windows in 09_processed_datasets/
++and write everything new to fixes_out/ (never overwrite originals).
++"""
++
++import json
++import math
++import os
++import sys
++import time
++
++import numpy as np
++
++REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
++DATA = os.path.join(REPO, "09_processed_datasets")
++OUT = os.path.join(REPO, "fixes_out")
++os.makedirs(OUT, exist_ok=True)
++
++# Make the original model classes importable (BaselineLSTM, BiLSTM, CNN-BiLSTM-Attn)
++sys.path.insert(0, os.path.join(REPO, "04_model_training"))
++
++SEQ_DIRS = {
++    "host": os.path.join(DATA, "processed_EVSE_B_Host", "sequences"),
++    "network": os.path.join(DATA, "processed_EVSE_A", "sequences"),
++    "power": os.path.join(DATA, "processed_EVSE_B_Power", "sequences"),
++}
++
++FAMILY_NAMES = {0: "Benign", 1: "Recon", 2: "DoS", 3: "Cryptojacking", 4: "Backdoor"}
++
++# Features that identify WHEN/WHERE a flow was captured rather than WHAT it does.
++# Absolute timestamps encode the capture file -> perfect but meaningless separation.
++NETWORK_LEAKY_COLUMNS = [
++    "bidirectional_first_seen_ms", "bidirectional_last_seen_ms",
++    "src2dst_first_seen_ms", "src2dst_last_seen_ms",
++    "dst2src_first_seen_ms", "dst2src_last_seen_ms",
++    "src_port",                 # ephemeral port = per-capture artefact
++    "dst_port",                 # optional: keep only if you argue it is behavioural
++    "vlan_id", "tunnel_id", "ip_version",          # constant / environment
++    "application_is_guessed", "application_confidence",  # nDPI meta, not traffic
++]
++
++
++# ------------------------------------------------------------------ data
++def feature_names(modality, seq_dir=None):
++    seq_dir = seq_dir or SEQ_DIRS[modality]
++    with open(os.path.join(seq_dir, "feature_columns.txt"), encoding="utf-8") as fh:
++        return [l.strip() for l in fh if l.strip()]
++
++
++def load_split(seq_dir, split):
++    """Returns X (N,T,F), y_binary, y_multiclass, meta(list of dict) for one split."""
++    d = np.load(os.path.join(seq_dir, f"{split}_windows.npz"))
++    meta_path = os.path.join(seq_dir, f"{split}_meta.json")
++    if not os.path.isfile(meta_path):  # DR sub-folders have no meta -> use parent
++        meta_path = os.path.join(os.path.dirname(seq_dir), f"{split}_meta.json")
++    with open(meta_path, encoding="utf-8") as fh:
++        meta = json.load(fh)
++    X = d["X"].astype(np.float32)
++    assert len(meta) == len(X), f"meta/window mismatch in {seq_dir}/{split}"
++    return X, d["y_binary"].astype(np.int64), d["y_multiclass"].astype(np.int64), meta
++
++
++def load_all(modality, seq_dir=None):
++    seq_dir = seq_dir or SEQ_DIRS[modality]
++    return {s: load_split(seq_dir, s) for s in ("train", "val", "test")}
++
++
++def subset(split_tuple, mask):
++    X, yb, ym, meta = split_tuple
++    idx = np.where(mask)[0]
++    return X[idx], yb[idx], ym[idx], [meta[i] for i in idx]
++
++
++def non_overlapping(split_tuple, window):
++    """Keep every `window`-th window inside each session -> no shared timesteps."""
++    _, _, _, meta = split_tuple
++    pos, keep = {}, np.zeros(len(meta), dtype=bool)
++    for i, m in enumerate(meta):
++        k = pos.get(m["session_id"], 0)
++        keep[i] = (k % window == 0)
++        pos[m["session_id"]] = k + 1
++    return subset(split_tuple, keep)
++
++
++# ------------------------------------------------------------------ DR (train-only fit)
++def fit_dr(kind, X_train, y_train_mc, pca_var=0.95):
++    """Fit PCA / LDA on TRAIN timesteps only; returns transform(X)->X'."""
++    from sklearn.decomposition import PCA
++    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
++
++    if kind in (None, "none"):
++        return lambda X: X, X_train.shape[-1]
++    n, t, f = X_train.shape
++    flat = X_train.reshape(n * t, f)
++    if kind == "pca":
++        m = PCA(n_components=pca_var if f > 1 else 1, svd_solver="full", random_state=0).fit(flat)
++    elif kind == "lda":
++        y_flat = np.repeat(y_train_mc, t)
++        n_comp = min(len(np.unique(y_flat)) - 1, f)
++        m = LinearDiscriminantAnalysis(n_components=max(1, n_comp), solver="svd").fit(flat, y_flat)
++    else:
++        raise ValueError(kind)
++
++    def tf(X):
++        a, b, c = X.shape
++        return m.transform(X.reshape(a * b, c)).reshape(a, b, -1).astype(np.float32)
++
++    return tf, tf(X_train[:1]).shape[-1]
++
++
++# ------------------------------------------------------------------ metrics
++def wilson_ci(k, n, z=1.96):
++    if n == 0:
++        return (float("nan"), float("nan"))
++    p = k / n
++    den = 1 + z * z / n
++    c = (p + z * z / (2 * n)) / den
++    h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
++    return (max(0.0, c - h), min(1.0, c + h))
++
++
++def binary_report(y_true, y_pred, y_prob=None, y_mc=None):
++    from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
++
++    y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
++    tn = int(((y_true == 0) & (y_pred == 0)).sum())
++    fp = int(((y_true == 0) & (y_pred == 1)).sum())
++    fn = int(((y_true == 1) & (y_pred == 0)).sum())
++    tp = int(((y_true == 1) & (y_pred == 1)).sum())
++    lo, hi = wilson_ci(fp, tn + fp)
++    r = {
++        "accuracy": accuracy_score(y_true, y_pred),
++        "precision": precision_score(y_true, y_pred, zero_division=0),
++        "recall": recall_score(y_true, y_pred, zero_division=0),
++        "f1": f1_score(y_true, y_pred, zero_division=0),
++        "fpr": fp / max(1, tn + fp),
++        "fpr_ci95_low": lo, "fpr_ci95_high": hi,
++        "n_benign_test": tn + fp, "n_attack_test": tp + fn,
++        "TN": tn, "FP": fp, "FN": fn, "TP": tp,
++    }
++    if y_prob is not None and len(np.unique(y_true)) == 2:
++        r["roc_auc"] = roc_auc_score(y_true, y_prob)
++    if y_mc is not None:  # recall per attack family (= detection rate of that family)
++        for fid in np.unique(y_mc):
++            m = y_mc == fid
++            name = FAMILY_NAMES.get(int(fid), str(fid))
++            key = "tnr_Benign" if fid == 0 else f"recall_{name}"
++            r[key] = float((y_pred[m] == (0 if fid == 0 else 1)).mean())
++    return {k: (float(v) if isinstance(v, (np.floating, float)) else v) for k, v in r.items()}
++
++
++# ------------------------------------------------------------------ deep training
++def train_torch(model_type, Xtr, ytr, Xva, yva, seed=42, hidden_size=64, num_layers=1,
++                dropout=0.2, epochs=40, lr=1e-3, batch_size=64, patience=8, verbose=False):
++    """Same recipe as lstm_common.train_binary_lstm (weighted CE, early stop on val F1)."""
++    import torch
++    import torch.nn as nn
++    from sklearn.metrics import f1_score
++    from lstm_common import build_model
++
++    torch.manual_seed(seed)
++    np.random.seed(seed)
++    torch.use_deterministic_algorithms(False)
++    model = build_model(model_type, Xtr.shape[-1], hidden_size=hidden_size,
++                        num_layers=num_layers, dropout=dropout)
++    counts = np.bincount(ytr, minlength=2).astype(np.float32)
++    w = torch.tensor(counts.sum() / (2 * np.maximum(counts, 1)), dtype=torch.float32)
++    crit = nn.CrossEntropyLoss(weight=w)
++    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
++    Xt, yt = torch.from_numpy(Xtr), torch.from_numpy(ytr)
++    Xv = torch.from_numpy(Xva)
++    g = torch.Generator().manual_seed(seed)
++    best, best_f1, bad = None, -1.0, 0
++    for ep in range(epochs):
++        model.train()
++        perm = torch.randperm(len(Xt), generator=g)
++        for i in range(0, len(Xt), batch_size):
++            b = perm[i:i + batch_size]
++            opt.zero_grad()
++            loss = crit(model(Xt[b]), yt[b])
++            loss.backward()
++            opt.step()
++        model.eval()
++        with torch.no_grad():
++            pv = model(Xv).argmax(1).numpy()
++        f1 = f1_score(yva, pv, zero_division=0)
++        if f1 > best_f1:
++            best_f1, bad = f1, 0
++            best = {k: v.clone() for k, v in model.state_dict().items()}
++        else:
++            bad += 1
++            if bad >= patience:
++                break
++        if verbose:
++            print(f"  ep{ep:02d} val_f1={f1:.4f}")
++    model.load_state_dict(best)
++    model.eval()
++    return model
++
++
++def predict_torch(model, X):
++    import torch
++    with torch.no_grad():
++        logits = model(torch.from_numpy(X))
++        prob = torch.softmax(logits, 1)[:, 1].numpy()
++    return (prob >= 0.5).astype(int), prob
++
++
++def n_params(model):
++    return int(sum(p.numel() for p in model.parameters()))
++
++
++def latency_ms(fn, X1, reps=300):
++    for _ in range(20):
++        fn(X1)
++    t = []
++    for _ in range(reps):
++        s = time.perf_counter()
++        fn(X1)
++        t.append((time.perf_counter() - s) * 1000)
++    return float(np.median(t)), float(np.percentile(t, 95))
++
++
++def save_rows(rows, name):
++    import pandas as pd
++    path = os.path.join(OUT, name)
++    pd.DataFrame(rows).to_csv(path, index=False)
++    print(f"\nSaved {path}")
++    return path
+diff --git a/requirements.txt b/requirements.txt
+new file mode 100644
+index 0000000..d6f6340
+--- /dev/null
++++ b/requirements.txt
+@@ -0,0 +1,13 @@
++# Training / analysis (PC)
++numpy>=1.24
++pandas>=2.0
++scikit-learn>=1.3
++scipy>=1.10
++joblib>=1.3
++torch>=2.1
++matplotlib>=3.7
++onnx>=1.15
++onnxruntime>=1.16
++psutil>=5.9
++
++# Edge devices: only numpy, onnxruntime (or onnxruntime-gpu on Jetson), psutil are needed
+-- 
+2.43.0
+

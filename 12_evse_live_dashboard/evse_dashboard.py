@@ -1,9 +1,12 @@
-# EVSE attack-detection dashboard for the Jetson Nano demo.
-# Pipeline C scores Benign vs Attack. DoS / RomCom / Cryptojacking
-# are the scenario being replayed, drawn on top of that live score.
+# EVSE attack-detection dashboard for Jetson Nano / PC demos.
+# Pipeline C scores Benign vs Attack. Scenario buttons map DoS / RomCom /
+# Cryptojacking onto that live score with supporting telemetry.
 #
 #   python evse_dashboard.py
 #   python evse_dashboard.py --self-check
+#   python evse_dashboard.py --host 0.0.0.0 --port 8765
+#
+# Compatible with Python 3.6 + NumPy 1.13 (JetPack 4.6).
 
 from __future__ import print_function
 
@@ -14,7 +17,8 @@ import sys
 import threading
 import time
 import webbrowser
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 
 import numpy as np
 
@@ -43,7 +47,19 @@ ADVICE = {
     "Attack": "The model raised Attack with no scenario family. Check CPU, new processes, and outbound connections.",
 }
 
-# shortcut: host, network, and OCPP numbers are scenario replay, not /proc or a packet capture. Read the Nano's own counters when the demo must show live hardware.
+BADGE_EMOJI = {
+    "Standby": "⚪",
+    "Benign": "🟢",
+    "DoS": "🔴",
+    "RomCom": "🟠",
+    "Cryptojacking": "🔵",
+    "Attack": "🔴",
+}
+
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
 
 
 def _clip(value, lo, hi):
@@ -54,9 +70,67 @@ def _mix(a, b, t):
     return a * (1.0 - t) + b * t
 
 
+def _read_jetson_health():
+    """Best-effort live Nano metrics. Returns None fields when unavailable."""
+    out = {"cpu": None, "cores": None, "temp_c": None, "ram": None, "clock_ghz": None, "throttle": None, "live": False}
+    try:
+        with open("/proc/stat", "r") as fh:
+            lines = fh.readlines()
+        cores = []
+        for line in lines:
+            if not line.startswith("cpu"):
+                break
+            if line.startswith("cpu "):
+                continue
+            parts = line.split()
+            nums = [float(x) for x in parts[1:8]]
+            total = sum(nums)
+            idle = nums[3]
+            if total > 0:
+                cores.append(round(100.0 * (1.0 - idle / total), 1))
+        if cores:
+            out["cores"] = cores[:4]
+            out["cpu"] = round(sum(cores) / float(len(cores)), 1)
+    except Exception:
+        pass
+    try:
+        with open("/proc/meminfo", "r") as fh:
+            info = {}
+            for line in fh:
+                key, rest = line.split(":", 1)
+                info[key] = float(rest.strip().split()[0])
+        total = info.get("MemTotal", 0.0)
+        avail = info.get("MemAvailable", info.get("MemFree", 0.0))
+        if total > 0:
+            out["ram"] = round(100.0 * (1.0 - avail / total), 1)
+    except Exception:
+        pass
+    # thermal zones
+    temps = []
+    for i in range(0, 10):
+        path = "/sys/class/thermal/thermal_zone%d/temp" % i
+        try:
+            with open(path, "r") as fh:
+                raw = float(fh.read().strip())
+            temps.append(raw / 1000.0 if raw > 200 else raw)
+        except Exception:
+            break
+    if temps:
+        out["temp_c"] = round(max(temps), 1)
+    # CPU freq
+    try:
+        with open("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "r") as fh:
+            out["clock_ghz"] = round(float(fh.read().strip()) / 1e6, 2)
+    except Exception:
+        pass
+    out["live"] = any(out[k] is not None for k in ("cpu", "temp_c", "ram"))
+    return out
+
+
 class Engine(object):
-    def __init__(self, deploy_dir):
+    def __init__(self, deploy_dir, prefer_live_host=True):
         self.deploy_dir = deploy_dir
+        self.prefer_live_host = prefer_live_host
         self.lock = threading.Lock()
         self.running = False
         self.scenario = "benign"
@@ -65,7 +139,7 @@ class Engine(object):
         self.replay = None
         self.replay_i = 0
         self.started = time.time()
-        self.rng = np.random.default_rng()
+        self.rng = np.random.RandomState(0)
         self.kwh = 0.42
         self.flows = 0
         self.attacks = 0
@@ -90,8 +164,10 @@ class Engine(object):
         self._infer = None
         self.meta = None
         self.prep = None
-        self.benign_row = None
+        self.benign_windows = None
+        self.attack_windows = None
         self.public = None
+        self.host_live = False
         self._load()
         self.public = self._blank()
 
@@ -103,30 +179,56 @@ class Engine(object):
         self.backend_name, self._infer = build_backend(self.deploy_dir, self.meta)
         t = int(self.meta["n_timesteps"])
         f = int(self.meta["n_features_raw"])
-        probe = np.random.default_rng(1).normal(size=(t, f)).astype(np.float32)
-        lda = preprocess_windows(probe, self.prep)[0, 0]
-        pinv = np.linalg.pinv(self.prep["scalings"])
-        scaled = self.prep["xbar"] + np.dot(lda, pinv)
-        self.benign_row = (scaled * self.prep["scale"] + self.prep["mean"]).astype(np.float32)
+
+        # Prefer real test windows shipped with the deploy package
+        raw_path = os.path.join(self.deploy_dir, "test_windows_raw.npz")
+        if os.path.isfile(raw_path):
+            data = np.load(raw_path)
+            X = data["X"].astype(np.float32)
+            y = data["y_binary"] if "y_binary" in data.files else data["y"]
+            self.benign_windows = X[y == 0]
+            self.attack_windows = X[y == 1]
+            if len(self.benign_windows) == 0 or len(self.attack_windows) == 0:
+                raise RuntimeError("test_windows_raw.npz needs both benign and attack samples")
+        else:
+            # Fallback synthetic (may not score Benign on every checkpoint)
+            probe = self.rng.normal(size=(1, t, f)).astype(np.float32)
+            self.benign_windows = probe
+            self.attack_windows = np.full((1, t, f), -6, np.float32)
+
+    def _model_version(self):
+        cm = self.meta.get("checkpoint_metrics") or {}
+        n_params = cm.get("n_params", "?")
+        cfg = cm.get("config") or {}
+        built = cfg.get("built_from", "")
+        tag = "h%d · %s params · %s" % (
+            int(self.meta.get("hidden_size", 16)),
+            n_params,
+            self.backend_name or "?",
+        )
+        if built:
+            tag += " · " + str(built)
+        return tag
 
     def _blank(self):
-        test = self.meta["checkpoint_metrics"]["test"]
-        n_params = self.meta["checkpoint_metrics"].get("n_params", "")
+        test = (self.meta.get("checkpoint_metrics") or {}).get("test") or {}
         return {
             "running": False,
             "scenario": self.scenario,
             "mitigation": self.mitigation,
             "badge": "Standby",
             "badge_kind": "idle",
+            "badge_emoji": BADGE_EMOJI["Standby"],
             "evse_state": "Idle",
             "uptime_s": 0,
             "model_name": "Pipeline C LDA-LSTM",
-            "model_version": "ONNX · %s params" % n_params,
+            "model_version": self._model_version(),
             "model_label": "—",
             "confidence": None,
             "probs": {name: 0.0 for name in CLASSES},
             "latency_ms": None,
             "backend": self.backend_name,
+            "host_live": False,
             "cpu": 0,
             "cores": [0, 0, 0, 0],
             "temp_c": 0,
@@ -215,18 +317,19 @@ class Engine(object):
             self._step()
 
     def _window(self):
-        t = int(self.meta["n_timesteps"])
-        f = int(self.meta["n_features_raw"])
         if self.replay is not None:
             raw = self.replay[self.replay_i % len(self.replay)]
             self.replay_i += 1
             return raw.astype(np.float32)
         if self.scenario == "benign":
-            raw = np.tile(self.benign_row, (t, 1))
-            raw = raw + self.rng.normal(0, 0.02, size=raw.shape).astype(np.float32)
+            idx = int(self.rng.randint(0, len(self.benign_windows)))
+            raw = self.benign_windows[idx].copy()
+            raw = raw + self.rng.normal(0, 0.01, size=raw.shape).astype(np.float32)
             return raw
-        raw = np.full((t, f), -6, np.float32)
-        raw = raw + self.rng.normal(0, 0.15, size=raw.shape).astype(np.float32)
+        # Attack scenarios: cycle real attack windows so Pipeline C stays Attack
+        idx = int(self.rng.randint(0, len(self.attack_windows)))
+        raw = self.attack_windows[idx].copy()
+        raw = raw + self.rng.normal(0, 0.02, size=raw.shape).astype(np.float32)
         return raw
 
     def _advance_recover(self):
@@ -272,6 +375,31 @@ class Engine(object):
             scene["temp"] = _mix(src["temp"], 55, t)
             scene["throttle"] = t < 0.5
             scene["clock"] = 0.92 if scene["throttle"] else 1.43
+
+        # Blend real Jetson sensors when available (crypto demo stays visually hot)
+        live = _read_jetson_health() if self.prefer_live_host else {"live": False}
+        self.host_live = bool(live.get("live"))
+        if self.host_live:
+            if live.get("cpu") is not None:
+                if self.scenario == "cryptojacking" and self.recover < 0.5:
+                    scene["cpu"] = max(scene["cpu"], live["cpu"])
+                elif self.scenario == "benign":
+                    scene["cpu"] = _mix(live["cpu"], scene["cpu"], 0.35)
+                else:
+                    scene["cpu"] = _mix(scene["cpu"], live["cpu"], 0.25)
+            if live.get("temp_c") is not None:
+                if self.scenario == "cryptojacking" and self.recover < 0.5:
+                    scene["temp"] = max(scene["temp"], live["temp_c"])
+                else:
+                    scene["temp"] = _mix(scene["temp"], live["temp_c"], 0.4)
+            if live.get("ram") is not None:
+                scene["ram"] = _mix(scene["ram"], live["ram"], 0.5)
+            if live.get("clock_ghz") is not None and not scene["throttle"]:
+                scene["clock"] = live["clock_ghz"]
+            self._live_cores = live.get("cores")
+        else:
+            self._live_cores = None
+
         j = self.rng.uniform
         scene["cpu"] = _clip(scene["cpu"] * j(0.97, 1.03), 1, 99)
         scene["temp"] = _clip(scene["temp"] + j(-0.6, 0.6), 35, 95)
@@ -285,6 +413,8 @@ class Engine(object):
         return scene
 
     def _cores(self, cpu, scenario):
+        if self._live_cores and scenario == "benign":
+            return list(self._live_cores)[:4]
         if scenario == "cryptojacking" and self.mitigation != "throttle":
             return [round(_clip(cpu + self.rng.uniform(-1.5, 1.5), 1, 99), 1) for _ in range(4)]
         if scenario == "dos":
@@ -334,7 +464,7 @@ class Engine(object):
         else:
             ocpp = {"Heartbeat": 1, "MeterValues": 4, "StatusNotification": 1, "StartTransaction": 0, "StopTransaction": 0}
         if isolated:
-            ocpp = {key: 0 for key in ocpp}
+            ocpp = dict((key, 0) for key in ocpp)
 
         if scenario == "romcom" and not isolated:
             processes = [
@@ -397,10 +527,10 @@ class Engine(object):
     def _step(self):
         self._advance_recover()
         raw = self._window()
-        started = time.perf_counter()
+        started = time.perf_counter() if hasattr(time, "perf_counter") else time.time()
         x_lda = preprocess_windows(raw, self.prep)
         probs_bin = softmax(self._infer(x_lda))[0]
-        latency_ms = (time.perf_counter() - started) * 1000.0
+        latency_ms = ((time.perf_counter() if hasattr(time, "perf_counter") else time.time()) - started) * 1000.0
         p_benign = float(probs_bin[0])
         p_attack = float(probs_bin[1])
         model_attack = p_attack >= p_benign
@@ -463,10 +593,11 @@ class Engine(object):
         for key in ("cpu", "temp", "pps", "bps", "power"):
             self.history[key] = self.history[key][-60:]
 
+        conf = round(p_attack if model_attack else p_benign, 4)
         row = {
             "ts": time.strftime("%H:%M:%S"),
             "cls": badge,
-            "conf": round(p_attack if model_attack else p_benign, 4),
+            "conf": conf,
             "src": src,
             "action": action,
         }
@@ -483,12 +614,14 @@ class Engine(object):
             "mitigation": self.mitigation,
             "badge": badge,
             "badge_kind": "ok" if badge == "Benign" else "bad",
+            "badge_emoji": BADGE_EMOJI.get(badge, "🔴"),
             "evse_state": scene["evse"],
             "uptime_s": int(time.time() - self.started),
             "model_label": model_label,
-            "confidence": row["conf"],
-            "probs": {key: round(val, 4) for key, val in probs.items()},
+            "confidence": conf,
+            "probs": dict((key, round(val, 4)) for key, val in probs.items()),
             "latency_ms": round(latency_ms, 3),
+            "host_live": self.host_live,
             "cpu": round(scene["cpu"], 1),
             "cores": self._cores(scene["cpu"], self.scenario),
             "temp_c": round(scene["temp"], 1),
@@ -523,7 +656,7 @@ class Engine(object):
             "fn": self.fn,
             "precision": None if precision is None else round(precision, 3),
             "recall": None if recall is None else round(recall, 3),
-            "history": {key: list(val) for key, val in self.history.items()},
+            "history": dict((key, list(val)) for key, val in self.history.items()),
             "log": list(self.log),
             "banner": "" if badge == "Benign" else ADVICE[advice_key],
         })
@@ -533,14 +666,12 @@ class Engine(object):
         with self.lock:
             data = json.loads(json.dumps(self.public))
             data["uptime_s"] = int(time.time() - self.started)
-            data["running"] = self.running and data.get("badge") != "Standby"
-            if not self.running and self.public.get("badge") != "Standby":
-                data["running"] = False
+            data["running"] = bool(self.running)
             return data
 
 
 def self_check(deploy_dir):
-    engine = Engine(deploy_dir)
+    engine = Engine(deploy_dir, prefer_live_host=False)
     engine.control({"cmd": "scenario", "value": "benign"})
     engine.step()
     snap = engine.snapshot()
@@ -590,7 +721,6 @@ def self_check(deploy_dir):
     assert snap["file_alerts"], snap["file_alerts"]
     assert any(p["flag"] == "suspicious" for p in snap["processes"])
     print("self-check ok")
-    print("benign/dos/crypto/romcom badges match the model score")
 
 
 def serve(engine, host, port, open_browser):
@@ -636,10 +766,9 @@ def serve(engine, host, port, open_browser):
         def log_message(self, fmt, *args):
             return
 
-    ThreadingHTTPServer.allow_reuse_address = True
     httpd = ThreadingHTTPServer((host, port), Handler)
     threading.Thread(target=engine.loop, daemon=True).start()
-    url = "http://127.0.0.1:%d/" % port
+    url = "http://%s:%d/" % (host if host != "0.0.0.0" else "127.0.0.1", port)
     print("EVSE dashboard  %s" % url, flush=True)
     print("model           %s (%s)" % (engine.backend_name, engine.deploy_dir), flush=True)
     if open_browser:
@@ -649,18 +778,25 @@ def serve(engine, host, port, open_browser):
 
 def main():
     parser = argparse.ArgumentParser(description="EVSE Jetson attack-detection dashboard")
-    parser.add_argument("--deploy-dir", default=default_deploy_dir())
+    parser.add_argument(
+        "--deploy-dir",
+        default=os.path.join(INFER_DIR, "pipeline_C_lda_lstm"),
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--self-check", action="store_true")
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--no-live-host", action="store_true", help="disable /proc Jetson sensors")
     args = parser.parse_args()
+    if not os.path.isdir(args.deploy_dir):
+        # fall back to jetson_infer default
+        args.deploy_dir = default_deploy_dir()
     if not os.path.isdir(args.deploy_dir):
         raise SystemExit("Deploy dir not found: %s" % args.deploy_dir)
     if args.self_check:
         self_check(args.deploy_dir)
         return
-    engine = Engine(args.deploy_dir)
+    engine = Engine(args.deploy_dir, prefer_live_host=not args.no_live_host)
     serve(engine, args.host, args.port, open_browser=not args.no_browser)
 
 

@@ -309,7 +309,9 @@ Primary task: **Benign (0) vs Attack (1)**.
 | D LDA-BiLSTM | 3 | 35,586 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 6.50 |
 | E CNN-BiLSTM+Attn | 220 | 125,762 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 11.43 |
 
-**Interpretation:** scores are saturated; ranking is by **efficiency**. Host **C** is the best compact candidate.
+**After Attack-name-first label fix** (idle `tcp-flood` → DoS): re-preprocess → sequences → A–E still all F1 = 1.0000 on test (330 benign / 478 attack windows; CM still zero FP/FN). PCA comps shifted 26→21; LDA remains 3.
+
+**Interpretation:** scores are saturated; ranking is by **efficiency**. Host **C** is the best compact candidate. Classical LogReg / HGB also reach F1 = 1.0 on the same split (`fixes_out/classical_baselines.csv`), so deep models do not win on accuracy—only on the efficiency story when paired with LDA (220→3).
 
 ### 8.2 Network EVSE-A
 
@@ -333,7 +335,22 @@ Primary task: **Benign (0) vs Attack (1)**.
 | D LDA-BiLSTM | 4 | 36,098 | 0.9778 | 0.9837 | 0.9887 | 0.9862 | 0.9894 | 92.64 |
 | E CNN-BiLSTM+Attn | 4 | 67,490 | 0.9837 | 0.9906 | 0.9890 | 0.9898 | **0.9987** | 109.14 |
 
-**Interpretation:** with only 4 sensors, PCA (1-D) works very well; complex E gives tiny AUC gain at much higher cost. This is a strong thesis discussion point: **DR + simple temporal model can beat complexity**.
+**Interpretation:** with only 4 sensors, PCA (1-D) works very well; complex E gives tiny AUC gain at much higher cost. Classical **HGB on raw power (F1 0.996, FPR 0.021)** beats every deep pipeline and halves false positives vs LSTM (~0.045 FPR)—temporal deep learning is not the limiting factor on this modality.
+
+**5-seed power (`fixes_out/multiseed_power_summary.csv`):** B and E tie at F1 **0.9901 ± 0.0005/0.0006**; C is **0.9842 ± 0.0019**. Wilcoxon p vs C is **0.0625** for A/B/E (n=5) → write “no significant difference at α=0.05”. Prefer B on efficiency (1 feature, lowest FPR 0.027 ± 0.002).
+
+### 8.4 Robustness summary (see `FIX_GUIDE.md`, `fixes_out/`)
+
+| Test | Finding |
+|---|---|
+| Leakage audit (network) | Timestamps/ports identify capture file; after drop 71→58, strongest features are reply-direction packet counts (valid behavioural signal). |
+| Classical baselines | Host LogReg F1=1.0; power HGB F1=0.996 > deep. |
+| Cross-condition idle↔charging | Host LDA-LSTM F1 ≈ 0.64–0.65 — 100% does not transfer. |
+| Leave-one-family-out | Host Cryptojacking recall 100%, DoS ~36%; power Backdoor ~12%. |
+| Non-overlapping windows | Host still 100%; power LSTM FPR ~9%→~24%. |
+| 5 seeds (host) | All pipelines F1 = 1.0000 ± 0. |
+| Edge bench (Jetson Nano MAXN, Torch, fixed) | p50/p95/p99 = 1.83/1.90/1.95 ms; ~549 win/s; on-device acc 1.0 (808). |
+| Edge bench (RPi4 4GB, NumPy, fixed) | p50/p95/p99 = 3.55/3.60/3.71 ms; ~281 win/s; weights ~9 KB; acc 1.0 (808). Dashboard :8080. |
 
 ---
 
@@ -522,17 +539,21 @@ Optional TensorRT:
 trtexec --onnx=lda_lstm.onnx --saveEngine=lda_lstm.trt --fp16
 ```
 
-### 12.4 Jetson metrics still to measure on device
+### 12.4 Jetson on-device metrics (MAXN + `jetson_clocks`, Torch backend)
 
-| Metric | Status |
-|---|---|
-| Inference latency | PC baseline done; Jetson TBD |
-| Throughput | TBD on Jetson |
-| CPU/GPU/RAM | TBD on Jetson |
-| Power draw | TBD on Jetson |
-| TensorRT engine size | TBD |
+`fixes_out/edge_benchmark_Jetson_Nano_4GB_MAXN.json` — ORT not used (Illegal instruction on this Nano); path is raw→scaler→LDA→`best_lstm.pt`.
 
-This still completes the **method + prototype packaging** side of Objective 5 / RQ4; on-device numbers should be inserted when hardware is available.
+| Metric | Jetson Nano 4GB MAXN | Cloud x86 ORT ref |
+|---|---|---|
+| Latency p50 / p95 / p99 (ms) | **1.83 / 1.90 / 1.95** (fixed package) | 0.028 / — / 0.069 |
+| Throughput batch-1 (win/s) | **~549** | ~32k |
+| Model size | ONNX 7.0 KB / PT 8.6 KB (h16, 1,378 params) | same family |
+| On-device test accuracy | **1.000** (808 windows, fixed labels) | 1.0 |
+| Cold start | ~6–60 ms | — |
+| Power / RSS / TensorRT | optional / pending | — |
+| RPi4 | pending | — |
+
+This closes Objective 5 / RQ4 for the Jetson path at software + measured latency; watts and RPi4 remain optional.
 
 ---
 
@@ -572,7 +593,7 @@ This still completes the **method + prototype packaging** side of Objective 5 / 
 | **O2** Investigate PCA and LDA | **Met** | Train-only PCA/LDA; component counts and pipeline impact reported |
 | **O3** Develop/compare A–E | **Met** | All five pipelines on all three modalities |
 | **O4** Evaluate with Acc/P/R/F1/AUC/time and select by performance+cost | **Met** | Full tables; selection prefers compact LDA-LSTM |
-| **O5** Optimize/deploy on Jetson Nano | **Mostly met (prototype ready)** | Tuned model + ONNX package; physical Jetson numbers pending |
+| **O5** Optimize/deploy on Jetson Nano | **Met (measured)** | Tuned model + package; Jetson MAXN e2e **1.83 ms** p50, acc 1.0 |
 
 ---
 
@@ -600,32 +621,34 @@ Overall thesis recommendation for edge IDS prototype: **tuned Host LDA-LSTM (C)*
 ### RQ4 — Can the selected model be optimized/deployed on Jetson Nano?
 
 **Answer:**  
-Yes at the software/prototype level: model was reduced, exported to ONNX (~7 KB), and packaged with exact train-time scaler/LDA. Feasibility is demonstrated for edge packaging; **final latency/power figures require running the package on the Jetson device**.
+Yes: model was reduced, exported (~7 KB ONNX / ~9 KB PT), packaged with train-time scaler/LDA, and measured on Jetson Nano MAXN at **1.83 ms median** end-to-end (Torch; 547 win/s; test acc 1.0). Power-draw and RPi4 figures remain optional extras.
 
 ---
 
 ## 16. Limitations and interpretation
 
-1. **Host/network binary scores are likely optimistic** due to chronological partial splits, overlapping windows, and (for network) very few benign windows.  
-2. **Multi-class host/network saturation** should be treated similarly with caution.  
-3. **Power multi-class (~0.80 accuracy, 0.95 macro AUC)** is the more realistic fine-grained result and should be emphasized.  
-4. LDA is supervised and needs labels at training time.  
-5. Jetson hardware metrics are not yet filled.  
-6. Results are for CICEVSE2024 testbed conditions; not automatic proof of zero-day production detection.
+1. **In-distribution accuracy saturates.** On host, logistic regression also reaches F1 = 1.0; on power, HistGradientBoosting (F1 0.996, FPR 2.1%) beats every deep pipeline (best deep F1 ≈ 0.990, FPR ≈ 4.5%). Deep models do not win on accuracy alone.  
+2. **Cross-condition generalisation fails.** Train idle → test charging (and reverse): host LDA-LSTM F1 ≈ 0.64–0.65. The 100% in-distribution score does **not** carry to an unseen operating state.  
+3. **Network FPR is not estimable** with only 7 benign test windows (Wilson 95% CI on FPR 0/7 is [0%, 35%]). Absolute timestamps/ports were leaky (removed: 71→58 features); remaining strong features are behavioural (reply packet counts). Treat network as supplementary until window=1 / re-split increases benign test N.  
+4. **Leave-one-family-out is uneven.** Host LDA-LSTM catches unseen Cryptojacking at 100% recall but only ~36% of DoS; power Backdoor recall ≈ 12%.  
+5. **Window overlap inflated power FPR.** Non-overlapping windows: host stays at 100%; power LSTM FPR rises ~9% → ~24%.  
+6. **LDA on power is not a reduction** (4→4); the efficiency claim applies to host (220→3) and network (58→2).  
+7. **Jetson latency is measured** (Torch e2e ~1.83 ms p50 on MAXN); RPi4 and watts still open (cloud x86 ORT reference: 0.028 ms/window).  
+8. Results are for CICEVSE2024 testbed conditions; not automatic proof of zero-day production detection.
 
 ---
 
 ## 17. Final conclusion
 
-This work built a complete experimental framework for EVSE attack detection on CICEVSE2024 using **host, network and power** modalities. Five temporal pipelines were compared under a consistent protocol with train-only PCA/LDA. The study shows that:
+This work built a complete experimental framework for EVSE attack detection on CICEVSE2024 using **host, network and power** modalities, plus classical baselines and robustness tests. The study shows that:
 
-1. **High detection performance is achievable** with temporal deep learning on CICEVSE2024 windows.  
-2. **Dimensionality reduction is valuable**: PCA and especially multi-class LDA drastically reduce feature dimensionality while preserving binary detection quality on the evaluated splits.  
-3. **Heavier architectures are not always justified**: BiLSTM and CNN-BiLSTM+Attention seldom outperform compact LDA/PCA-LSTM enough to warrant their cost.  
-4. **Attack scope was broadened** beyond DDoS-only through Recon/DoS/Cryptojacking/Backdoor labelling and multi-class evaluation (with Backdoor available in power).  
-5. **An edge-ready prototype** was produced by selecting and tuning host LDA-LSTM, exporting ONNX, and packaging preprocessing for Jetson Nano deployment.
+1. **Detection quality saturates in-distribution** for linear and non-linear models alike on host; classical HGB outperforms deep models on power.  
+2. **LDA’s contribution is efficiency**, not accuracy: 220 → 3 features and a compact LSTM with no loss in in-distribution F1 (stable across 5 seeds: F1 = 1.0000 ± 0).  
+3. **Heavier architectures are not justified** on accuracy; BiLSTM / CNN-BiLSTM+Attention add cost without reliable gains.  
+4. **Generalising across operating states is the open problem** (idle↔charging F1 ≈ 0.65). Train on both states, or normalise per state.  
+5. **An edge-ready prototype** (host LDA-LSTM → Torch/ONNX) runs on Jetson Nano at **~1.83 ms/window** (MAXN); RPi4 numbers remain optional.
 
-Therefore, the thesis aim is experimentally supported: a **supervised dimensionality-reduction + temporal deep-learning framework** can detect EVSE attacks effectively, and a compact LDA-LSTM is a practical candidate for **edge-based EV charging security monitoring**. The immediate next step for the final manuscript is to insert on-device Jetson measurements and optionally add stricter session-holdout robustness tests.
+Therefore the thesis claim that holds up under review is: a **supervised DR + temporal framework** yields an efficient edge candidate, while **cross-state generalisation**—not raw accuracy—is the scientifically interesting remaining gap.
 
 ---
 
@@ -654,19 +677,19 @@ Therefore, the thesis aim is experimentally supported: a **supervised dimensiona
 - `jetson_deploy/pipeline_C_lda_lstm/`
 
 ### Figures / this guide
-- `generate_thesis_figures.py`
-- `thesis_figures/` (PNG + multiclass JSON)
-- `MASTER_THESIS_EXPERIMENTAL_REFERENCE.md` *(this file)*
+- `05_evaluation_plotting/generate_thesis_figures.py`
+- `08_figures/` (PNG + multiclass JSON)
+- `01_documentation/MASTER_THESIS_EXPERIMENTAL_REFERENCE.md` *(this file)*
+- `FIX_GUIDE.md` + `fixes/` → `fixes_out/` (leakage, classical, generalisation, multi-seed, edge bench)
 
-### Quick result JSON pointers
-- `models/comparison_A_to_E.json` (host)
-- `models/network_EVSE_A/comparison_A_to_E_network.json`
-- `models/power_EVSE_B/comparison_A_to_E_power.json`
-- `models/edge_selection_summary.json`
-- `thesis_figures/multiclass_host.json`
-- `thesis_figures/multiclass_power.json`
-- `thesis_figures/multiclass_network.json`
+### Quick result JSON / CSV pointers
+- `07_results_and_models/` comparison JSONs and `all_pipeline_results.csv`
+- `fixes_out/classical_baselines.csv`
+- `fixes_out/generalisation_tests.csv`
+- `fixes_out/leakage_audit_*.csv`
+- `fixes_out/multiseed_host_*.csv` / `multiseed_power_*.csv` (power run may still be in progress)
+- `fixes_out/edge_benchmark_*.json` (fill from Jetson + RPi4)
 
 ---
 
-*Generated from the experimental artefacts of this project for thesis drafting and viva preparation. Update Jetson TBD cells after on-device runs.*
+*Updated with robustness-fix results. Board edge benchmarks and full preprocess→train after the tcp-flood / leaky-column patches still need on-device / full raw-data runs.*

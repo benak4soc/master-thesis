@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EVSE Attack Detection — Pi 4 Demo</title>
+<style>
+  :root {
+    --bg: #0a0f14;
+    --panel: #121a22;
+    --card: #16212c;
+    --line: #2a3b4d;
+    --text: #e8eef5;
+    --muted: #8fa3b8;
+    --ok: #2ee59d;
+    --bad: #ff4d6d;
+    --dos: #ff8a3d;
+    --rom: #c084fc;
+    --crypto: #f5c16c;
+    --info: #5eb1ff;
+    --accent: #b8f34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #1a2a1a 0%, transparent 55%),
+      radial-gradient(900px 400px at 100% 0%, #1a2035 0%, transparent 50%),
+      var(--bg);
+    color: var(--text);
+    font: 14px/1.4 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  }
+  header.top {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.1fr) 1.4fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(10, 15, 20, 0.92);
+    backdrop-filter: blur(8px);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .brand .kicker {
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .brand h1 { margin: 2px 0 0; font-size: 18px; font-weight: 700; }
+  .brand .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .badge {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 72px;
+    padding: 10px 16px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: #101820;
+  }
+  .badge .dot { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .badge .title { font-size: 28px; font-weight: 780; line-height: 1.15; margin-top: 2px; }
+  .badge.ok { background: linear-gradient(135deg, #0f2a1c, #123524); border-color: #1f5a3a; }
+  .badge.ok .title { color: var(--ok); }
+  .badge.bad { background: linear-gradient(135deg, #2a1016, #3a1418); border-color: #7a2434; }
+  .badge.bad .title { color: #ffb4c0; }
+  .badge.idle { background: #151e28; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .chip {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 6px 10px;
+    min-width: 92px;
+  }
+  .chip span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .chip strong { font-size: 14px; font-weight: 650; }
+  #banner {
+    display: none;
+    margin: 10px 16px 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #3a1418;
+    border: 1px solid #7a2434;
+    color: #ffd7d7;
+  }
+  #banner strong { display: block; font-size: 16px; margin-bottom: 2px; }
+  main {
+    padding: 12px 16px 24px;
+    display: grid;
+    grid-template-columns: 1.15fr 1fr 0.95fr;
+    gap: 12px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    min-width: 0;
+  }
+  .card h2 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h2 .n {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    background: #243246;
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+  .conf-row { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: center; }
+  .gauge-wrap { position: relative; width: 110px; height: 70px; }
+  .gauge-wrap canvas { width: 110px; height: 70px; background: transparent; }
+  .gauge-label {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    text-align: center; font-size: 18px; font-weight: 750;
+  }
+  .bars { display: grid; gap: 6px; margin: 8px 0; }
+  .barline { display: grid; grid-template-columns: 108px 1fr 46px; gap: 8px; align-items: center; }
+  .track { height: 10px; background: #0e1620; border-radius: 99px; overflow: hidden; }
+  .fill { height: 100%; width: 0; border-radius: 99px; }
+  canvas.chart { width: 100%; height: 130px; background: #0e1620; border-radius: 10px; display: block; }
+  canvas.donut { width: 100%; height: 150px; background: #0e1620; border-radius: 10px; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #243140; white-space: nowrap; }
+  th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .scroll { max-height: 260px; overflow: auto; }
+  tr.DoS td { background: rgba(255, 138, 61, 0.12); }
+  tr.RomCom td { background: rgba(192, 132, 252, 0.12); }
+  tr.Cryptojacking td { background: rgba(245, 193, 108, 0.12); }
+  tr.Benign td { background: rgba(46, 229, 157, 0.08); }
+  .filters, .seg, .scenarios { display: flex; gap: 6px; flex-wrap: wrap; }
+  button, .filters button {
+    background: #1c2836;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+  }
+  button:hover { border-color: #3d536b; }
+  button.on { outline: 2px solid var(--info); background: #223247; }
+  button.scenario { font-weight: 700; }
+  button.scenario[data-value="benign"].on { outline-color: var(--ok); }
+  button.scenario[data-value="dos"].on { outline-color: var(--dos); }
+  button.scenario[data-value="romcom"].on { outline-color: var(--rom); }
+  button.scenario[data-value="cryptojacking"].on { outline-color: var(--crypto); }
+  .metrics { display: flex; gap: 8px; flex-wrap: wrap; }
+  .metric {
+    background: #0e1620;
+    border: 1px solid #223040;
+    border-radius: 10px;
+    padding: 8px 10px;
+    min-width: 78px;
+  }
+  .metric b { display: block; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .metric span, .metric { color: var(--muted); font-size: 12px; }
+  .metric b { color: var(--text); }
+  .cores { display: grid; gap: 4px; margin-top: 8px; }
+  .warn { color: #ffb4b4; }
+  .oktext { color: var(--ok); }
+  .advice {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 10px;
+    background: #0e1620;
+    border-left: 3px solid var(--accent);
+    min-height: 48px;
+  }
+  .span-2 { grid-column: span 2; }
+  .controls-sticky {
+    position: sticky;
+    bottom: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+  }
+  @media (max-width: 1100px) {
+    header.top, main { grid-template-columns: 1fr; }
+    .span-2 { grid-column: auto; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="kicker">Section 13 · Raspberry Pi 4</div>
+    <h1>EVSE attack-detection dashboard</h1>
+    <div class="sub">Host Pipeline C · LDA-LSTM · binary edge model with scenario families</div>
+  </div>
+  <div id="badge" class="badge idle" aria-live="polite">
+    <div class="dot">Status</div>
+    <div class="title">Idle</div>
+  </div>
+  <div class="chips">
+    <div class="chip"><span>EVSE state</span><strong id="evse">Idle</strong></div>
+    <div class="chip"><span>Uptime</span><strong id="uptime">—</strong></div>
+    <div class="chip"><span>Model</span><strong id="model">LDA-LSTM</strong></div>
+    <div class="chip"><span>Version</span><strong id="modelver">—</strong></div>
+    <div class="chip"><span>Mitigation</span><strong id="mit">off</strong></div>
+  </div>
+</header>
+<div id="banner"></div>
+<main>
+  <section class="card">
+    <h2><span class="n">2</span> Live detection</h2>
+    <div class="conf-row">
+      <div class="gauge-wrap">
+        <canvas id="gauge" width="110" height="70"></canvas>
+        <div class="gauge-label" id="conf">—</div>
+      </div>
+      <div>
+        <div class="bars" id="bars"></div>
+        <p class="hint" id="latency">Latency: —</p>
+      </div>
+    </div>
+    <canvas class="chart" id="prob" width="640" height="130"></canvas>
+    <p class="hint" id="note"></p>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">3</span> Attack timeline / log</h2>
+    <div class="filters" id="filters"></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Class</th><th>Conf</th><th>Source IP</th><th>Action</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">4</span> Pi 4 system health</h2>
+    <div class="metrics" id="healthnums"></div>
+    <div class="cores" id="cores"></div>
+    <canvas class="chart" id="health" width="640" height="130"></canvas>
+    <p class="hint" id="healthnote">CPU (blue) and temperature (amber). Cryptojacking drives sustained high load.</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">5</span> Network traffic</h2>
+    <div class="metrics" id="netnums"></div>
+    <canvas class="chart" id="net" width="640" height="130"></canvas>
+    <div id="talkers"></div>
+    <p class="hint" id="netnote">DoS shows as a packets/s and SYN spike.</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">6</span> EVSE / OCPP</h2>
+    <div class="metrics" id="charge"></div>
+    <div class="bars" id="ocpp"></div>
+    <p class="hint" id="anomaly">No meter or session anomaly.</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">7</span> Process and host</h2>
+    <div id="procs"></div>
+    <p class="hint" id="beacon"></p>
+    <div id="falerts"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">8</span> Attack summary</h2>
+    <div class="metrics" id="counts"></div>
+    <canvas class="donut" id="donut" width="640" height="150"></canvas>
+    <div id="testset"></div>
+  </section>
+
+  <section class="card span-2 controls-sticky">
+    <h2><span class="n">9–10</span> Demo controls and alerts</h2>
+    <div class="scenarios" id="scenarios"></div>
+    <p></p>
+    <div class="seg">
+      <button type="button" data-cmd="start">Start detection</button>
+      <button type="button" data-cmd="stop">Stop</button>
+    </div>
+    <p class="hint">Mitigation is logged for the demo only — firewall rules are not changed.</p>
+    <div class="seg" id="mits"></div>
+    <p><label><input type="checkbox" id="sound"> Alert sound on new detection</label></p>
+    <div class="advice" id="advice">Recommended mitigation appears here when an attack is active.</div>
+  </section>
+</main>
+<script>
+const COLORS = {Benign:"#2ee59d", DoS:"#ff8a3d", RomCom:"#c084fc", Cryptojacking:"#f5c16c"};
+const ORDER = ["Benign","DoS","RomCom","Cryptojacking"];
+let filter = "All";
+let lastAlert = 0;
+let audioCtx = null;
+
+function esc(s){return String(s == null ? "" : s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function pct(x){return Math.round((Number(x) || 0) * 100);}
+function uptime(s){
+  if (s == null) return "—";
+  s = Math.floor(s);
+  return Math.floor(s/3600) + "h " + Math.floor((s%3600)/60) + "m";
+}
+function send(cmd, value){
+  return fetch("/api/control", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({cmd: cmd, value: value})});
+}
+function fit(canvas){
+  const r = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 300;
+  const h = canvas.clientHeight || 120;
+  if (canvas.width !== Math.floor(w*r) || canvas.height !== Math.floor(h*r)) {
+    canvas.width = Math.floor(w*r);
+    canvas.height = Math.floor(h*r);
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(r,0,0,r,0,0);
+  return {ctx: ctx, w: w, h: h};
+}
+function drawLines(canvas, series){
+  const box = fit(canvas);
+  const ctx = box.ctx;
+  ctx.clearRect(0,0,box.w,box.h);
+  ctx.strokeStyle = "#243140";
+  ctx.strokeRect(0.5,0.5,box.w-1,box.h-1);
+  series.forEach(function(line){
+    const vals = line.values || [];
+    if (!vals.length) return;
+    let max = line.max;
+    if (max == null) {
+      max = 1;
+      vals.forEach(function(v){ if (v > max) max = v; });
+    }
+    if (max <= 0) max = 1;
+    ctx.beginPath();
+    ctx.strokeStyle = line.color;
+    ctx.lineWidth = 2;
+    vals.forEach(function(v, i){
+      const x = vals.length === 1 ? box.w/2 : (i / (vals.length - 1)) * (box.w - 16) + 8;
+      const y = box.h - 8 - (Math.max(0, v) / max) * (box.h - 20);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  });
+}
+function drawGauge(canvas, value, color){
+  const box = fit(canvas);
+  const ctx = box.ctx;
+  ctx.clearRect(0,0,box.w,box.h);
+  const cx = box.w/2, cy = box.h - 4, r = Math.min(box.w/2 - 6, box.h - 10);
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = "#243140";
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, Math.PI, 0);
+  ctx.stroke();
+  const v = Math.max(0, Math.min(1, value || 0));
+  ctx.strokeStyle = color || "#2ee59d";
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.PI * v);
+  ctx.stroke();
+}
+function drawDonut(canvas, counts){
+  const box = fit(canvas);
+  const ctx = box.ctx;
+  ctx.clearRect(0,0,box.w,box.h);
+  const keys = ["DoS","RomCom","Cryptojacking"];
+  const total = keys.reduce(function(s,k){ return s + (counts[k] || 0); }, 0);
+  const cx = 70, cy = box.h/2, rad = 46;
+  let angle = -Math.PI/2;
+  if (!total) {
+    ctx.strokeStyle = "#243140";
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, Math.PI*2);
+    ctx.stroke();
+  }
+  keys.forEach(function(k){
+    const n = counts[k] || 0;
+    if (!n || !total) return;
+    const slice = n / total * Math.PI * 2;
+    ctx.beginPath();
+    ctx.strokeStyle = COLORS[k];
+    ctx.lineWidth = 14;
+    ctx.arc(cx, cy, rad, angle, angle + slice);
+    ctx.stroke();
+    angle += slice;
+  });
+  ctx.fillStyle = "#e7eef6";
+  ctx.font = "16px sans-serif";
+  ctx.fillText(String(total), cx - 10, cy + 5);
+  ctx.font = "13px sans-serif";
+  keys.forEach(function(k, i){
+    ctx.fillStyle = COLORS[k];
+    ctx.fillText(k + " " + (counts[k] || 0), 140, 28 + i * 22);
+  });
+}
+function meter(label, value, color, text){
+  const width = Math.max(0, Math.min(100, value));
+  const shown = text == null ? width.toFixed(0) + "%" : text;
+  return '<div class="barline"><span>' + esc(label) + '</span><div class="track"><div class="fill" style="width:' + width + '%;background:' + color + '"></div></div><span>' + esc(shown) + '</span></div>';
+}
+function render(s){
+  window.__state = s;
+  const badge = document.getElementById("badge");
+  const cls = s.attack_class;
+  if (!s.running) {
+    badge.className = "badge idle";
+    badge.innerHTML = '<div class="dot">Status</div><div class="title">Idle</div>';
+  } else if (s.status === "Attack") {
+    badge.className = "badge bad";
+    badge.innerHTML = '<div class="dot">Attack detected</div><div class="title">🔴 ' + esc(cls || "Attack") + '</div>';
+  } else {
+    badge.className = "badge ok";
+    badge.innerHTML = '<div class="dot">Status</div><div class="title">🟢 Benign</div>';
+  }
+  document.getElementById("evse").textContent = s.evse_state || "Idle";
+  document.getElementById("uptime").textContent = uptime(s.uptime_s);
+  document.getElementById("model").textContent = s.model_name || "LDA-LSTM";
+  document.getElementById("modelver").textContent = s.model_version || "—";
+  document.getElementById("mit").textContent = s.mitigation || "off";
+  const banner = document.getElementById("banner");
+  if (s.alert) {
+    banner.style.display = "block";
+    banner.innerHTML = "<strong>" + esc(s.alert.title) + "</strong>" + esc(s.alert.detail);
+    if (s.sound && s.alert.id !== lastAlert) beep();
+    lastAlert = s.alert.id;
+  } else {
+    banner.style.display = "none";
+  }
+  const confVal = s.confidence == null ? 0 : s.confidence;
+  document.getElementById("conf").textContent = s.confidence == null ? "—" : (confVal * 100).toFixed(0) + "%";
+  drawGauge(document.getElementById("gauge"), confVal, s.status === "Attack" ? COLORS[cls] || "#ff4d6d" : "#2ee59d");
+  document.getElementById("bars").innerHTML = ORDER.map(function(name){
+    return meter(name, pct(s.class_probs[name]), COLORS[name]);
+  }).join("");
+  drawLines(document.getElementById("prob"), ORDER.map(function(name){
+    return {color: COLORS[name], max: 1, values: (s.prob_history || []).map(function(row){ return row[name] || 0; })};
+  }));
+  document.getElementById("latency").textContent = s.latency_ms == null ? "Latency: —" : ("Latency: " + s.latency_ms.toFixed(2) + " ms / window");
+  document.getElementById("note").textContent = s.model_note || "";
+  const body = document.getElementById("log");
+  const rows = (s.log || []).slice().reverse().filter(function(row){ return filter === "All" || row.cls === filter; });
+  body.innerHTML = rows.map(function(row){
+    return "<tr class=\"" + esc(row.cls) + "\"><td>" + esc(row.ts) + "</td><td>" + esc(row.cls) + "</td><td>" + (row.confidence*100).toFixed(1) + "%</td><td>" + esc(row.src) + "</td><td>" + esc(row.action) + "</td></tr>";
+  }).join("");
+  const h = s.health || {};
+  document.getElementById("healthnums").innerHTML = [
+    ["CPU", h.cpu == null ? "—" : h.cpu.toFixed(1) + "%"],
+    ["Temp", h.temp_c == null ? "—" : h.temp_c.toFixed(1) + "°C"],
+    ["RAM", h.ram_pct == null ? "—" : h.ram_pct.toFixed(1) + "%"],
+    ["Clock", h.mhz == null ? "—" : Math.round(h.mhz) + " MHz"],
+    ["Throttle", h.throttled == null ? "—" : (h.throttled ? "yes" : "no")]
+  ].map(function(pair){ return '<div class="metric"><b>' + esc(pair[1]) + '</b><span>' + esc(pair[0]) + '</span></div>'; }).join("");
+  document.getElementById("cores").innerHTML = (h.cores || []).map(function(v, i){ return meter("Core " + i, v, "#5eb1ff"); }).join("");
+  drawLines(document.getElementById("health"), [
+    {color:"#5eb1ff", max:100, values:(s.health_history||[]).map(function(row){ return row.cpu; })},
+    {color:"#f5c16c", max:100, values:(s.health_history||[]).map(function(row){ return row.temp; })}
+  ]);
+  document.getElementById("healthnote").textContent = h.cpu == null
+    ? "CPU, temperature, RAM, and throttling are read from the Pi when available."
+    : (h.stress ? "Cryptojacking scenario is loading one core. Amber = temperature." : "Blue = CPU %. Amber = temperature °C.");
+  const n = s.net || {};
+  document.getElementById("netnums").innerHTML = [
+    ["Packets/s", n.pps == null ? "—" : Math.round(n.pps)],
+    ["Bytes/s", n.bps == null ? "—" : Math.round(n.bps)],
+    ["Connections", n.conns == null ? "—" : n.conns],
+    ["SYN half-open", n.syn == null ? "—" : n.syn]
+  ].map(function(pair){ return '<div class="metric"><b>' + esc(pair[1]) + '</b><span>' + esc(pair[0]) + '</span></div>'; }).join("");
+  drawLines(document.getElementById("net"), [
+    {color:"#ff8a3d", values:(s.net_history||[]).map(function(row){ return row.pps; })},
+    {color:"#5eb1ff", values:(s.net_history||[]).map(function(row){ return row.bps; })}
+  ]);
+  document.getElementById("talkers").innerHTML = "<p class=\"hint\">Top talkers</p>" + (n.talkers || []).map(function(t){
+    return '<div>' + esc(t.ip) + ' · ' + esc(t.share) + '</div>';
+  }).join("") || "<p class=\"hint\">No talkers yet.</p>";
+  document.getElementById("netnote").textContent = n.mode === "scenario"
+    ? "Orange packets/s and blue bytes/s are scenario playback. Live iface: " + (n.live_pps == null ? "n/a" : (Math.round(n.live_pps) + " pkt/s, " + Math.round(n.live_bps) + " B/s")) + "."
+    : "Chart follows the live interface when a scenario is not forcing traffic.";
+  const o = s.ocpp || {};
+  document.getElementById("charge").innerHTML = [
+    ["Voltage", o.voltage == null ? "—" : o.voltage + " V"],
+    ["Current", o.current == null ? "—" : o.current + " A"],
+    ["Power", o.power == null ? "—" : o.power + " kW"],
+    ["Energy", o.energy_kwh == null ? "—" : o.energy_kwh + " kWh"],
+    ["OCPP/min", o.rate == null ? "—" : o.rate]
+  ].map(function(pair){ return '<div class="metric"><b>' + esc(pair[1]) + '</b><span>' + esc(pair[0]) + '</span></div>'; }).join("");
+  const types = o.types || {};
+  const maxType = Math.max.apply(null, [1].concat(Object.keys(types).map(function(k){ return types[k]; })));
+  document.getElementById("ocpp").innerHTML = Object.keys(types).map(function(k){
+    return meter(k, types[k] / maxType * 100, "#5eb1ff", String(types[k]));
+  }).join("") || "<p class=\"hint\">No OCPP mix yet.</p>";
+  const anomaly = document.getElementById("anomaly");
+  anomaly.textContent = o.anomaly || "No meter or session anomaly in this scenario.";
+  anomaly.className = o.anomaly ? "hint warn" : "hint";
+  const host = s.host || {};
+  document.getElementById("procs").innerHTML = "<table><thead><tr><th>Process</th><th>CPU</th><th>Note</th></tr></thead><tbody>" + (host.processes || []).map(function(p){
+    return "<tr><td>" + esc(p.name) + "</td><td>" + esc(p.cpu) + "</td><td>" + esc(p.note) + "</td></tr>";
+  }).join("") + "</tbody></table>";
+  document.getElementById("beacon").textContent = host.beacons || "";
+  document.getElementById("falerts").innerHTML = (host.alerts || []).map(function(a){ return '<div class="warn">' + esc(a) + '</div>'; }).join("");
+  const sum = s.summary || {by_class:{}};
+  document.getElementById("counts").innerHTML = [
+    ["Flows", sum.flows || 0],
+    ["Attacks", sum.attacks || 0],
+    ["False alarms", sum.false_alarms || 0]
+  ].map(function(pair){ return '<div class="metric"><b>' + esc(pair[1]) + '</b><span>' + esc(pair[0]) + '</span></div>'; }).join("");
+  drawDonut(document.getElementById("donut"), sum.by_class || {});
+  const test = s.test;
+  const box = document.getElementById("testset");
+  if (!test) {
+    box.textContent = "";
+  } else {
+    const cm = test.confusion_matrix || [[0,0],[0,0]];
+    const fam = test.per_family || {};
+    box.innerHTML = '<p class="hint">Held-out host test, ' + esc(test.n) + ' windows (binary model).</p>'
+      + '<div class="metrics">'
+      + metric("Accuracy", test.accuracy) + metric("Precision", test.precision) + metric("Recall", test.recall) + metric("F1", test.f1)
+      + '</div><table><thead><tr><th></th><th>Pred benign</th><th>Pred attack</th></tr></thead><tbody>'
+      + '<tr><td>Actual benign</td><td>' + cm[0][0] + '</td><td>' + cm[0][1] + '</td></tr>'
+      + '<tr><td>Actual attack</td><td>' + cm[1][0] + '</td><td>' + cm[1][1] + '</td></tr></tbody></table>'
+      + '<p class="hint">Family recall of binary alert: '
+      + Object.keys(fam).map(function(name){
+          const row = fam[name];
+          const rate = row.recall != null ? row.recall : row.rate;
+          return name + " " + Math.round(rate * 100) + "%";
+        }).join(" · ") + '</p>';
+  }
+  document.getElementById("advice").textContent = ADVICE_TEXT(s);
+  document.querySelectorAll("button[data-value]").forEach(function(btn){
+    const cmd = btn.getAttribute("data-cmd");
+    const value = btn.getAttribute("data-value");
+    const on = (cmd === "scenario" && s.scenario === value) || (cmd === "mitigation" && s.mitigation === value) || (cmd === "filter" && filter === value);
+    btn.classList.toggle("on", on);
+  });
+  document.getElementById("sound").checked = !!s.sound;
+}
+function metric(label, value){
+  const text = value == null ? "—" : (value * 100).toFixed(1) + "%";
+  return '<div class="metric"><b>' + text + '</b><span>' + label + '</span></div>';
+}
+function ADVICE_TEXT(s){
+  const key = s.attack_class || (s.status === "Benign" ? "Benign" : "Benign");
+  const map = {
+    Benign: "No mitigation needed. Charging can continue.",
+    DoS: "Recommended: Block the source IP and rate-limit new SYNs. Resume once OCPP heartbeats return.",
+    RomCom: "Recommended: Isolate the EVSE from the WAN, stop the unexpected process, inspect outbound destinations.",
+    Cryptojacking: "Recommended: Throttle or stop the miner, confirm CPU/temp fall, keep the charging session up."
+  };
+  return map[key] || map.Benign;
+}
+function beep(){
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.value = 0.05;
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+  } catch (err) {}
+}
+function boot(){
+  const filters = document.getElementById("filters");
+  ["All"].concat(ORDER).forEach(function(name){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = name;
+    btn.setAttribute("data-cmd", "filter");
+    btn.setAttribute("data-value", name);
+    btn.addEventListener("click", function(){ filter = name; if (window.__state) render(window.__state); });
+    filters.appendChild(btn);
+  });
+  const scenarios = document.getElementById("scenarios");
+  [["benign","Run Benign"],["dos","Simulate DoS"],["romcom","Simulate RomCom"],["cryptojacking","Simulate Cryptojacking"]].forEach(function(pair){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "scenario";
+    btn.textContent = pair[1];
+    btn.setAttribute("data-cmd", "scenario");
+    btn.setAttribute("data-value", pair[0]);
+    btn.addEventListener("click", function(){ send("scenario", pair[0]); });
+    scenarios.appendChild(btn);
+  });
+  const mits = document.getElementById("mits");
+  [["off","Off"],["block","Block IP"],["throttle","Throttle"],["isolate","Isolate EVSE"]].forEach(function(pair){
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = pair[1];
+    btn.setAttribute("data-cmd", "mitigation");
+    btn.setAttribute("data-value", pair[0]);
+    btn.addEventListener("click", function(){ send("mitigation", pair[0]); });
+    mits.appendChild(btn);
+  });
+  document.querySelector("button[data-cmd=start]").addEventListener("click", function(){ send("start"); });
+  document.querySelector("button[data-cmd=stop]").addEventListener("click", function(){ send("stop"); });
+  document.getElementById("sound").addEventListener("change", function(ev){ send("sound", ev.target.checked); });
+  setInterval(poll, 1000);
+  poll();
+}
+function poll(){
+  fetch("/api/state").then(function(r){ return r.json(); }).then(render).catch(function(){});
+}
+boot();
+</script>
+</body>
+</html>

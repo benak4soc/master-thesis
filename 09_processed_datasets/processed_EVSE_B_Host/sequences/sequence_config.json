@@ -5,19 +5,19 @@
   "random_state": 42,
   "train_frac": 0.7,
   "val_frac": 0.15,
-  "n_train_sessions": 26,
+  "n_train_sessions": 27,
   "n_val_sessions": 9,
-  "n_test_sessions": 9,
+  "n_test_sessions": 8,
   "shapes": {
     "train": {
       "X": [
-        4073,
+        4108,
         10,
         220
       ],
       "y_binary_counts": {
         "benign": 1592,
-        "attack": 2481
+        "attack": 2516
       }
     },
     "val": {
@@ -33,13 +33,13 @@
     },
     "test": {
       "X": [
-        843,
+        808,
         10,
         220
       ],
       "y_binary_counts": {
         "benign": 330,
-        "attack": 513
+        "attack": 478
       }
     }
   }

@@ -6,3 +6,9 @@ venv/
 .DS_Store
 Thumbs.db
 *.tmp
+
+# Root junctions / cwd training leftovers (canonical data is under 09_ and 07_)
+/processed_EVSE_A/
+/processed_EVSE_B_Host/
+/processed_EVSE_B_Power/
+/models/

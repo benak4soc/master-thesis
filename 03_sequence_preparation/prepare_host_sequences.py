@@ -35,15 +35,13 @@ warnings.filterwarnings("ignore")
 # CONFIGURATION
 # ============================================================
 
-INPUT_CSV = os.path.join(
-    "processed_EVSE_B_Host",
-    "EVSE_B_Host_Events_Clean.csv"
-)
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_HOST = os.path.join(_REPO, "09_processed_datasets", "processed_EVSE_B_Host")
+if not os.path.isdir(_HOST):
+    _HOST = "processed_EVSE_B_Host"
 
-OUTPUT_DIR = os.path.join(
-    "processed_EVSE_B_Host",
-    "sequences"
-)
+INPUT_CSV = os.path.join(_HOST, "EVSE_B_Host_Events_Clean.csv")
+OUTPUT_DIR = os.path.join(_HOST, "sequences")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

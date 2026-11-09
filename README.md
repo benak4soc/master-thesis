@@ -19,6 +19,7 @@
 | 11 | `11_jetson_nano_demo/` | Jetson Nano setup TODO + Pipeline C inference and desktop GUI |
 | 12 | `12_evse_live_dashboard/` | Browser dashboard: Benign / DoS / RomCom / Cryptojacking replay on Pipeline C |
 | 13 | `13_rpi4_algorithm_dashboard/` | Raspberry Pi 4 discussion: NumPy LDA-LSTM runtime, on-device results, and the demo dashboard |
+| 14 | `14_robustness_fixes/` | Leakage/classical/generalisation/multi-seed/edge benches + `FIX_GUIDE.md` / `fixes_out/` |
 
 ## Pipelines
 - **A** LSTM (no DR)
@@ -45,3 +46,20 @@ Files larger than ~95MB (especially full cleaned network CSV and large network a
 
 ## Key result file
 `07_results_and_models/all_pipeline_results.csv`
+
+## Robustness fixes (required for thesis claims)
+See `FIX_GUIDE.md`. Scripts in `fixes/` write only to `fixes_out/`.
+
+```bash
+python fixes/01_leakage_audit.py
+python fixes/02_network_drop_leaky.py
+python fixes/03_classical_baselines.py
+python fixes/04_generalisation_tests.py
+python fixes/05_multiseed_pipelines.py --modality host
+python fixes/05_multiseed_pipelines.py --modality power   # ~40 min CPU / faster on GPU
+# On Jetson Nano / RPi4:
+python fixes/06_edge_benchmark.py --model-dir 11_jetson_nano_demo/pipeline_C_lda_lstm \
+  --raw-windows <test_windows_raw.npz> --device-name "Jetson Nano 4GB"
+```
+
+**Corrected thesis framing:** in-distribution accuracy saturates (classical ≈ deep on host; HGB beats deep on power); LDA’s value is efficiency (220→3 features); cross-state generalisation (idle↔charging F1≈0.65) is the open problem. Source patches: Attack-name-first host labels; leaky network columns excluded; network `WINDOW_SIZE=1`.

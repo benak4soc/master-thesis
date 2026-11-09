@@ -13,24 +13,23 @@
     "1": "Attack"
   },
   "checkpoint_metrics": {
-    "val": {
-      "accuracy": 1.0,
-      "f1": 1.0,
-      "roc_auc": 1.0
-    },
     "test": {
+      "loss": 0.0441558683434358,
       "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
       "f1": 1.0,
       "roc_auc": 1.0
     },
     "n_params": 1378,
-    "latency_ms_per_window": 0.3953530004946515,
     "config": {
       "hidden_size": 16,
       "num_layers": 1,
       "dropout": 0.2,
       "learning_rate": 0.001,
-      "batch_size": 64
+      "batch_size": 64,
+      "seed": 42,
+      "built_from": "fixed_host_Attack_name_first"
     }
   },
   "feature_columns_file": "feature_columns.txt"

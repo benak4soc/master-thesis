@@ -1,0 +1,47 @@
+{
+  "pipeline": "C_LDA_LSTM_edge_h16",
+  "model_type": "lstm",
+  "device": "cpu",
+  "seq_dir": "D:\\HDBW\\3rd sem\\project\\master-thesis\\09_processed_datasets\\processed_EVSE_B_Host\\sequences\\lda_multiclass",
+  "n_params": 1378,
+  "window_features_shape": {
+    "timesteps": 10,
+    "features": 3
+  },
+  "hyperparameters": {
+    "hidden_size": 16,
+    "num_layers": 1,
+    "dropout": 0.2,
+    "batch_size": 64,
+    "epochs_max": 40,
+    "epochs_run": 12,
+    "best_epoch": 4,
+    "learning_rate": 0.001,
+    "patience": 8,
+    "model_kwargs": {},
+    "class_weights": {
+      "benign": 1.2902010050251256,
+      "attack": 0.8163751987281399
+    }
+  },
+  "training_time_seconds": 3.9592772000005425,
+  "best_val_f1": 0.9942857142857143,
+  "test_metrics": {
+    "loss": 0.0441558683434358,
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "roc_auc": 1.0
+  },
+  "confusion_matrix": [
+    [
+      330,
+      0
+    ],
+    [
+      0,
+      478
+    ]
+  ]
+}

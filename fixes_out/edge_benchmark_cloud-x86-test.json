@@ -1,0 +1,25 @@
+{
+  "device": "cloud-x86-test",
+  "machine": "x86_64",
+  "python": "3.13.18",
+  "onnxruntime": "1.29.0",
+  "provider": "CPUExecutionProvider",
+  "onnx_size_kb": 7.01171875,
+  "cold_start_ms": 7.822284999974727,
+  "latency_ms_e2e_batch1": {
+    "median": 0.027827999929286307,
+    "p95": 0.043769699857421074,
+    "p99": 0.06853195001440325,
+    "max": 4.195927999944615
+  },
+  "throughput_windows_per_s": {
+    "batch_1": 32061.5012720683,
+    "batch_32": 48531.59806986737,
+    "batch_256": 46794.94488977575
+  },
+  "peak_rss_mb": 107.9609375,
+  "rss_increase_mb": 60.3671875,
+  "cpu_percent_during_latency_loop": 104.3,
+  "test_accuracy_on_device": 1.0,
+  "n_test_windows": 843
+}

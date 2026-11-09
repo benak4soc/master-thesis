@@ -19,8 +19,8 @@
   "fit_on": "train_timesteps_only",
   "note": "Backdoor not present in EVSE-B host HPC file; LDA uses Benign/Recon/DoS/Cryptojacking when available.",
   "explained_variance_ratio": [
-    0.9839856028556824,
-    0.011033897288143635,
-    0.004980457480996847
+    0.9881976246833801,
+    0.007810583338141441,
+    0.003991821315139532
   ]
 }

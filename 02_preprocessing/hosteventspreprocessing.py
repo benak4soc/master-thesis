@@ -26,12 +26,27 @@ warnings.filterwarnings("ignore")
 # CONFIGURATION
 # ============================================================
 
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INPUT_FILE = os.path.join(
-    "host events",
-    "EVSE-B-HPC-Kernel-Events-Combined.csv"
+    _REPO,
+    "10_raw_data",
+    "host_events",
+    "EVSE-B-HPC-Kernel-Events-Combined.csv",
 )
+# Fall back to legacy relative path if raw data lives beside the script cwd
+if not os.path.isfile(INPUT_FILE):
+    INPUT_FILE = os.path.join(
+        "host events",
+        "EVSE-B-HPC-Kernel-Events-Combined.csv",
+    )
 
-OUTPUT_DIR = "processed_EVSE_B_Host"
+OUTPUT_DIR = os.path.join(
+    _REPO,
+    "09_processed_datasets",
+    "processed_EVSE_B_Host",
+)
+if not os.path.isdir(os.path.dirname(OUTPUT_DIR)):
+    OUTPUT_DIR = "processed_EVSE_B_Host"
 
 os.makedirs(
     OUTPUT_DIR,
@@ -272,18 +287,12 @@ print(
 
 def map_attack_group(row):
     """
-    Prefer Scenario when it already encodes the thesis families.
-    Fall back to Attack name mapping.
+    Prefer the specific Attack name (it is unambiguous: tcp-flood is always DoS).
+    Fall back to Scenario only when the Attack name is unknown.
+
+    FIX: the raw CICEVSE2024 host file labels the idle tcp-flood run with
+    Scenario="Recon". Scenario-first mapping turned that DoS run into Recon.
     """
-
-    scenario_key = (
-        str(row["Scenario"])
-        .strip()
-        .lower()
-    )
-
-    if scenario_key in SCENARIO_TO_GROUP:
-        return SCENARIO_TO_GROUP[scenario_key]
 
     attack_key = (
         str(row["Attack"])
@@ -293,6 +302,15 @@ def map_attack_group(row):
 
     if attack_key in ATTACK_TO_GROUP:
         return ATTACK_TO_GROUP[attack_key]
+
+    scenario_key = (
+        str(row["Scenario"])
+        .strip()
+        .lower()
+    )
+
+    if scenario_key in SCENARIO_TO_GROUP:
+        return SCENARIO_TO_GROUP[scenario_key]
 
     # Last resort: if labeled attack but unknown type
     if str(row["Label"]).lower() == "attack":

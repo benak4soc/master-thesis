@@ -14,20 +14,20 @@
     "dropout": 0.2,
     "batch_size": 64,
     "epochs_max": 40,
-    "epochs_run": 10,
-    "best_epoch": 2,
+    "epochs_run": 9,
+    "best_epoch": 1,
     "learning_rate": 0.001,
     "patience": 8,
     "model_kwargs": {},
     "class_weights": {
-      "benign": 1.2792085427135678,
-      "attack": 0.820838371624345
+      "benign": 1.2902010050251256,
+      "attack": 0.8163751987281399
     }
   },
-  "training_time_seconds": 6.504497400019318,
-  "best_val_f1": 1.0,
+  "training_time_seconds": 16.9832207999425,
+  "best_val_f1": 0.9942857142857143,
   "test_metrics": {
-    "loss": 0.0018869061646650412,
+    "loss": 0.006755003992181558,
     "accuracy": 1.0,
     "precision": 1.0,
     "recall": 1.0,
@@ -41,7 +41,7 @@
     ],
     [
       0,
-      513
+      478
     ]
   ]
 }

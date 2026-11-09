@@ -11,19 +11,19 @@
     "dropout": 0.2,
     "batch_size": 64,
     "epochs_max": 40,
-    "epochs_run": 15,
-    "best_epoch": 7,
+    "epochs_run": 12,
+    "best_epoch": 4,
     "learning_rate": 0.001,
     "patience": 8,
     "class_weights": {
-      "benign": 1.2792085427135678,
-      "attack": 0.820838371624345
+      "benign": 1.2902010050251256,
+      "attack": 0.8163751987281399
     }
   },
-  "training_time_seconds": 9.593929999973625,
+  "training_time_seconds": 18.331694399937987,
   "best_val_f1": 1.0,
   "test_metrics": {
-    "loss": 0.00037894538088169483,
+    "loss": 0.0009171457764191123,
     "accuracy": 1.0,
     "precision": 1.0,
     "recall": 1.0,
@@ -37,7 +37,7 @@
     ],
     [
       0,
-      513
+      478
     ]
   ]
 }

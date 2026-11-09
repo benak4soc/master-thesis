@@ -36,7 +36,9 @@ OUTPUT_DIR = os.path.join(
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-WINDOW_SIZE = 5
+# FIX Gap 2: window=1 maximizes independent windows so the tiny benign
+# test count (was 7 at window=5) grows enough for a meaningful FPR CI.
+WINDOW_SIZE = 1
 STRIDE = 1
 RANDOM_STATE = 42
 TRAIN_FRAC = 0.70
@@ -55,7 +57,25 @@ METADATA = [
     "target",
     "target_multiclass",
     "source_file",
+    # FIX: capture-specific columns. Absolute timestamps identify the source
+    # pcap/CSV (a single threshold on dst2src_first_seen_ms gave 100% test
+    # accuracy), ephemeral ports and nDPI meta are not attack behaviour.
+    "bidirectional_first_seen_ms",
+    "bidirectional_last_seen_ms",
+    "src2dst_first_seen_ms",
+    "src2dst_last_seen_ms",
+    "dst2src_first_seen_ms",
+    "dst2src_last_seen_ms",
+    "src_port",
+    "dst_port",
+    "vlan_id",
+    "tunnel_id",
+    "ip_version",
+    "application_is_guessed",
+    "application_confidence",
 ]
+# NOTE: the timestamps above are still used for SORTING (see sort_values below);
+# they are only excluded from the model input.
 
 ATTACK_TO_GROUP = {
     "benign": "Benign",

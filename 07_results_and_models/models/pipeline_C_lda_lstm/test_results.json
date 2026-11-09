@@ -1,7 +1,9 @@
 {
   "pipeline": "PIPELINE C \u2014 LDA-LSTM (multi-class LDA features)",
+  "model_type": "lstm",
   "device": "cpu",
   "seq_dir": "processed_EVSE_B_Host\\sequences\\lda_multiclass",
+  "n_params": 17794,
   "window_features_shape": {
     "timesteps": 10,
     "features": 3
@@ -12,19 +14,20 @@
     "dropout": 0.2,
     "batch_size": 64,
     "epochs_max": 40,
-    "epochs_run": 9,
-    "best_epoch": 1,
+    "epochs_run": 10,
+    "best_epoch": 2,
     "learning_rate": 0.001,
     "patience": 8,
+    "model_kwargs": {},
     "class_weights": {
-      "benign": 1.2792085427135678,
-      "attack": 0.820838371624345
+      "benign": 1.2902010050251256,
+      "attack": 0.8163751987281399
     }
   },
-  "training_time_seconds": 3.5198797999764793,
-  "best_val_f1": 1.0,
+  "training_time_seconds": 14.243258799891919,
+  "best_val_f1": 0.9865642994241842,
   "test_metrics": {
-    "loss": 0.02839773504196533,
+    "loss": 0.007105867575424222,
     "accuracy": 1.0,
     "precision": 1.0,
     "recall": 1.0,
@@ -38,7 +41,7 @@
     ],
     [
       0,
-      513
+      478
     ]
   ]
 }

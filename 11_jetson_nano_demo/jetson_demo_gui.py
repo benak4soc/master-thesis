@@ -7,7 +7,7 @@
 #   python jetson_demo_gui.py --deploy-dir path/to/pipeline_C_lda_lstm
 # ============================================================
 
-from __future__ import annotations
+from __future__ import print_function
 
 import argparse
 import os
@@ -34,7 +34,7 @@ ATTACK_FAMILIES_TEXT = (
 
 
 class EvseIdsGui(tk.Tk):
-    def __init__(self, deploy_dir: str):
+    def __init__(self, deploy_dir):
         super().__init__()
         self.title("EVSE IDS Demo — Pipeline C (LDA-LSTM)")
         self.geometry("920x640")
@@ -170,7 +170,7 @@ class EvseIdsGui(tk.Tk):
         if path:
             self.deploy_dir.set(path)
 
-    def _set_busy(self, busy: bool, msg: str | None = None):
+    def _set_busy(self, busy, msg=None):
         self._busy = busy
         if msg:
             self.status.set(msg)

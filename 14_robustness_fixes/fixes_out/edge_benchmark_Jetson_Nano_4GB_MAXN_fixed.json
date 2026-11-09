@@ -1,0 +1,29 @@
+{
+  "device": "Jetson Nano 4GB MAXN fixed",
+  "machine": "aarch64",
+  "python": "3.6.9",
+  "backend": "torch",
+  "torch": "1.10.0",
+  "numpy": "1.13.3",
+  "pt_size_kb": 8.6064453125,
+  "onnx_size_kb": 7.01171875,
+  "cold_start_ms": 6.368160247802734,
+  "latency_ms_e2e_batch1": {
+    "median": 1.8308162689208984,
+    "p95": 1.9002199172973633,
+    "p99": 1.9458317756652832,
+    "max": 2.0673274993896484,
+    "mean": 1.8369712829589844
+  },
+  "throughput_windows_per_s": {
+    "batch_1": 548.5812159233722,
+    "batch_32": 4412.749769460093,
+    "batch_64": 5010.533977042945
+  },
+  "peak_rss_mb": null,
+  "rss_increase_mb": null,
+  "cpu_percent_during_latency_loop": null,
+  "test_accuracy_on_device": 1.0,
+  "n_test_windows": 808,
+  "reps": 500
+}

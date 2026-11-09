@@ -82,11 +82,17 @@ Demo GUI: `cd 11_jetson_nano_demo && python jetson_demo_gui.py`
 - [ ] Have 1–2 saved `.npy` windows ready (benign-like / attack-like) if you collect real host windows later
 
 ### F. Thesis metrics to capture on Jetson
-- [ ] Inference latency (ms/window) — use GUI Benchmark or `jetson_infer.py --demo`
-- [ ] Throughput (windows/s) ≈ `1000 / latency_ms`
-- [ ] Model size: ONNX (and TRT if built)
-- [ ] RAM / CPU (and GPU if TRT) during inference (`tegrastats`)
-- [ ] Optional: power draw (USB power meter or `tegrastats`)
+- [x] **Done on Nano @ 192.168.1.4 (MAXN):** rebuilt from **fixed host labels**, redeployed.
+  → `fixes_out/edge_benchmark_Jetson_Nano_4GB_MAXN_fixed.json`
+  p50/p95/p99 = **1.83 / 1.90 / 1.95 ms**, ~549 win/s, ONNX 7 KB / PT 8.6 KB,
+  on-device test **acc 1.000** (808 windows), edge model **1,378 params (h16)**.
+  Package path on device: `~/evse-ids/pipeline_C_lda_lstm/`
+  GUI: `cd ~/evse-ids && python3 jetson_demo_gui.py` (VNC `:5900`)
+  Cloud x86 ORT reference: **0.028 ms**.
+- [x] RPi4 bench done @ 192.168.1.11 → `fixes_out/edge_benchmark_RPi4_4GB.json`
+  (NumPy runtime) p50 **3.55 ms**, ~281 win/s, acc **1.000**, dashboard http://192.168.1.11:8080/
+- [ ] Optional psutil RSS/CPU; USB power meter / tegrastats watts
+- [ ] Optional LogReg-on-LDA(3) classical latency comparison
 
 ### G. Demo script (suggested live flow)
 1. Open GUI → show **What this detects** panel  

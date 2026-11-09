@@ -33,10 +33,12 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 warnings.filterwarnings("ignore")
 
 
-SEQ_DIR = os.path.join(
-    "processed_EVSE_B_Host",
-    "sequences"
-)
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_HOST = os.path.join(_REPO, "09_processed_datasets", "processed_EVSE_B_Host")
+if not os.path.isdir(_HOST):
+    _HOST = "processed_EVSE_B_Host"
+
+SEQ_DIR = os.path.join(_HOST, "sequences")
 
 PCA_DIR = os.path.join(SEQ_DIR, "pca")
 LDA_DIR = os.path.join(SEQ_DIR, "lda_multiclass")

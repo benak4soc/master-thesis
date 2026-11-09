@@ -1,0 +1,27 @@
+{
+  "device": "RPi4 4GB",
+  "machine": "aarch64",
+  "python": "3.9.2",
+  "backend": "numpy",
+  "numpy": "1.19.5",
+  "weights_size_kb": 9.314453125,
+  "cold_start_ms": 22.173643112182617,
+  "latency_ms_e2e_batch1": {
+    "median": 3.5523176193237305,
+    "p95": 3.604745864868164,
+    "p99": 3.7141060829162598,
+    "max": 4.540920257568359,
+    "mean": 3.5586414337158203
+  },
+  "throughput_windows_per_s": {
+    "batch_1": 281.0475709737906,
+    "batch_32": 3925.436219432955,
+    "batch_64": 5271.480488464815
+  },
+  "peak_rss_mb": 43.109375,
+  "rss_increase_mb": 15.26171875,
+  "cpu_percent_during_latency_loop": 100.4,
+  "test_accuracy_on_device": 1.0,
+  "n_test_windows": 808,
+  "reps": 500
+}

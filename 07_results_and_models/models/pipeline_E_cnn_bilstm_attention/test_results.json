@@ -23,14 +23,14 @@
       "cnn_kernel": 3
     },
     "class_weights": {
-      "benign": 1.2792085427135678,
-      "attack": 0.820838371624345
+      "benign": 1.2902010050251256,
+      "attack": 0.8163751987281399
     }
   },
-  "training_time_seconds": 11.43076389998896,
+  "training_time_seconds": 33.761829999974,
   "best_val_f1": 1.0,
   "test_metrics": {
-    "loss": 0.00044844779196344983,
+    "loss": 0.001107354081446269,
     "accuracy": 1.0,
     "precision": 1.0,
     "recall": 1.0,
@@ -44,7 +44,7 @@
     ],
     [
       0,
-      513
+      478
     ]
   ]
 }
